@@ -64,7 +64,7 @@ function parseCsv(text: string): Record<string, string>[] {
   return all.slice(1).map(values=>Object.fromEntries(headers.map((key,i)=>[key,values[i]??""])));
 }
 // Prefix formula-like values so exported CSVs cannot execute spreadsheet formulas.
-const csvEscape = (v:unknown) => { let value=String(v??""); if(/^[\\s\\u0000-\\u0020]*[=+\\-@\\t\\r]/.test(value))value="'"+value; return '"'+value.replace(/"/g,'""')+'"'; };
+const csvEscape = (v:unknown) => { let value=String(v??""); if(/^[\s\u0000-\u0020]*[=+\-@\t\r]/.test(value))value="'"+value; return '"'+value.replace(/"/g,'""')+'"'; };
 const toStage = (v:string):ApplicationStage => APPLICATION_STAGES.includes(v as ApplicationStage) ? v as ApplicationStage : "saved";
 
 export default function HomePage() {

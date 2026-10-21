@@ -41,6 +41,8 @@ create table if not exists public.application_contacts (
 create index if not exists application_contacts_application_user_idx on public.application_contacts(application_id,user_id);
 create index if not exists application_contacts_contact_user_idx on public.application_contacts(contact_id,user_id);
 
+create index if not exists application_contacts_user_id_idx on public.application_contacts(user_id);
+
 create table if not exists public.referral_requests (
  id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade,
  application_id uuid not null, contact_id uuid not null,

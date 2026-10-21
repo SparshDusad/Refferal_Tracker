@@ -101,8 +101,22 @@ export default function HomePage() {
     ]);
     if(a.error)notify("Could not load applications: "+a.error.message,true);else setApps((a.data??[]) as ApplicationRecord[]);
     if(c.error)notify("Could not load contacts: "+c.error.message,true);else setContacts((c.data??[]) as ContactRecord[]);
-    if(t.error)notify("Could not load templates. Apply the latest schema in Supabase.",true);else if(t.data?.length)setTemplates(t.data as OutreachTemplate[]);
-  },[cloudReady,notify]);
+    if(t.error){
+      notify("Could not load templates. Apply the latest schema in Supabase.",true);
+    }else if(t.data?.length){
+      setTemplates(t.data as OutreachTemplate[]);
+    }else{
+      // Give each new account its own editable defaults instead of showing
+      // preview-only templates that disappear after the next refresh.
+      const defaults=initialTemplates.map(({key,title,channel,subject,body})=>({
+        key,title,channel,subject,body,user_id:session!.user.id,
+      }));
+      const seeded=await supabase.from("outreach_templates")
+        .upsert(defaults,{onConflict:"user_id,key"}).select("*").order("title");
+      if(seeded.error)notify("Workspace loaded, but default templates could not be created: "+seeded.error.message,true);
+      else setTemplates((seeded.data??[]) as OutreachTemplate[]);
+    }
+  },[cloudReady,notify,session?.user.id]);
   useEffect(()=>{if(cloudReady)void Promise.resolve().then(loadCloud);},[loadCloud,cloudReady]);
 
   const filtered=useMemo(()=>apps.filter(a=>{

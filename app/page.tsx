@@ -114,11 +114,13 @@ export default function HomePage() {
     setApps([]);setContacts([]);setReferralRequests([]);setActivity([]);setTemplates([]);
     setAgentAnswer("");setAgentQuestion("");setAgentMode(null);setAgentRefreshedAt(null);
   },[session?.user.id]);
+  const themeInitialized=useRef(false);
   useEffect(()=>{
     const saved=window.localStorage.getItem("referralflow-theme");
     if(saved==="light"||saved==="dark")setTheme(saved);
+    themeInitialized.current=true;
   },[]);
-  useEffect(()=>{document.documentElement.dataset.theme=theme;window.localStorage.setItem("referralflow-theme",theme);},[theme]);
+  useEffect(()=>{document.documentElement.dataset.theme=theme;if(themeInitialized.current)window.localStorage.setItem("referralflow-theme",theme);},[theme]);
 
   const loadCloud=useCallback(async()=>{
     if(!cloudReady)return;

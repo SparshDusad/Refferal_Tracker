@@ -164,7 +164,7 @@ export default function HomePage() {
   }).sort((a,b)=>(b.updated_at??"").localeCompare(a.updated_at??"")),[apps,search,stageFilter]);
   const followUps=useMemo(()=>apps.filter(a=>a.next_action&&a.next_action_date).sort((a,b)=>(a.next_action_date??"").localeCompare(b.next_action_date??"")),[apps]);
   const due=apps.filter(a=>{const n=dueIn(a.next_action_date);return a.next_action&&n!==null&&n<=0&&a.stage!=="rejected";}).length;
-  const refs=referralRequests.filter(r=>["referred","in_review","interview"].includes(r.status)).length;
+  const refs=referralRequests.filter(r=>["referred","in_review","interview","hired","rejected","closed"].includes(r.status)).length;
   const interviews=referralRequests.filter(r=>r.status==="interview").length;
   const offers=referralRequests.filter(r=>r.status==="hired").length;
   const agentRecommendations=useMemo(()=>{

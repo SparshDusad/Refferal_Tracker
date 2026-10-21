@@ -82,7 +82,6 @@ export default function HomePage() {
   const [email,setEmail]=useState("");
   const [busy,setBusy]=useState(false);
   const [agentRefreshedAt,setAgentRefreshedAt]=useState<Date|null>(null);
-  const [agentClock,setAgentClock]=useState<Date>(()=>new Date());
   const [agentQuestion,setAgentQuestion]=useState("");
   const [agentAnswer,setAgentAnswer]=useState("");
   const [agentMode,setAgentMode]=useState<"gemini"|"rules"|null>(null);
@@ -153,11 +152,11 @@ export default function HomePage() {
   const agentRecommendations=useMemo(()=>{
     const items:{id:string;title:string;detail:string;actionLabel:string;kind:"follow-ups"|"application"|"contact"|"referral"|"templates"|"board";app?:ApplicationRecord;referral?:ReferralRequestRecord}[]=[];
     if(due>0)items.push({id:"due",title:"Clear your follow-up queue",detail:due+" item"+(due===1?" is":"s are")+" due today or overdue. A short, thoughtful follow-up can keep a conversation moving.",actionLabel:"Review follow-ups",kind:"follow-ups"});
-    const staleReferral=referralRequests.find(r=>["referred","in_review"].includes(r.status)&&agentClock.getTime()-new Date(r.updated_at).getTime()>7*86400000);
+    const staleReferral=referralRequests.find(r=>["referred","in_review"].includes(r.status)&&!r.response_summary&&!r.outcome);
     if(staleReferral){
       const person=contacts.find(c=>c.id===staleReferral.contact_id);
       const opportunity=apps.find(a=>a.id===staleReferral.application_id);
-      items.push({id:"referral-check-in",title:"Check in on a referral",detail:(person?.name??"A referred person")+" · "+(opportunity?.company??"the opportunity")+" has not been updated in over a week. Confirm progress and log the outcome.",actionLabel:"Review referral",kind:"referral",referral:staleReferral});
+      items.push({id:"referral-check-in",title:"Check in on a referral",detail:(person?.name??"A referred person")+" · "+(opportunity?.company??"the opportunity")+" has no progress update or outcome recorded yet. Confirm the latest status and add a short update.",actionLabel:"Review referral",kind:"referral",referral:staleReferral});
     }
     const needsNextStep=apps.find(a=>!["offer","rejected"].includes(a.stage)&&!a.next_action);
     if(needsNextStep)items.push({id:"next-step",title:"Give an opportunity a next step",detail:needsNextStep.company+" · "+needsNextStep.role+" has no next action recorded. Add a concrete action and date so it doesn't go quiet.",actionLabel:"Update opportunity",kind:"application",app:needsNextStep});
@@ -169,7 +168,7 @@ export default function HomePage() {
     if(items.length<3&&templates.length>0)items.push({id:"template",title:"Prepare your next outreach",detail:"Personalize a saved message before contacting someone. ReferralFlow never sends messages automatically.",actionLabel:"Open templates",kind:"templates"});
     if(items.length<3&&apps.length>0)items.push({id:"pipeline",title:"Review the pipeline",detail:"A quick stage review helps keep your search accurate and your next decision clear.",actionLabel:"Open board",kind:"board"});
     return items.slice(0,3);
-  },[apps,contacts,referralRequests,templates,due,agentClock]);
+  },[apps,contacts,referralRequests,templates,due]);
 
   async function saveApp(e:FormEvent<HTMLFormElement>){
     e.preventDefault();const form=new FormData(e.currentTarget);
@@ -390,7 +389,7 @@ export default function HomePage() {
           <section className="panel agent-panel" aria-labelledby="career-agent-title">
             <div className="agent-heading">
               <div className="agent-brand"><span className="agent-symbol"><Sparkles size={18}/></span><div><div className="agent-eyebrow">AGENTIC AI · CAREER COPILOT</div><h2 id="career-agent-title">Your progress, understood.</h2><p>I review your pipeline and turn it into practical next steps.</p></div></div>
-              <button className="button small" onClick={()=>{const now=new Date();setAgentClock(now);setAgentRefreshedAt(now);}}><Activity size={14}/>Reassess</button>
+              <button className="button small" onClick={()=>setAgentRefreshedAt(new Date())}><Activity size={14}/>Reassess</button>
             </div>
             <div className="agent-insights">
               <div className="agent-insight"><span>What you’ve done</span><strong>{apps.length} <small>opportunities</small></strong><p>{contacts.length} contacts · {referralRequests.length} tracked referrals</p></div>

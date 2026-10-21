@@ -122,7 +122,7 @@ export default function HomePage() {
       if(seeded.error)notify("Workspace loaded, but default templates could not be created: "+seeded.error.message,true);
       else setTemplates((seeded.data??[]) as OutreachTemplate[]);
     }
-  },[cloudReady,notify,session?.user.id]);
+  },[cloudReady,notify,session]);
   useEffect(()=>{if(cloudReady)void Promise.resolve().then(loadCloud);},[loadCloud,cloudReady]);
 
   const filtered=useMemo(()=>apps.filter(a=>{

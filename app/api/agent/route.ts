@@ -29,7 +29,7 @@ function fallbackAnswer(question: string, workspace: Workspace) {
   const overdue = Number(summary.dueFollowUps ?? 0);
   const missing = apps.filter((app) => app.stage !== "offer" && app.stage !== "rejected" && !app.nextAction);
   const saved = apps.filter((app) => app.stage === "saved");
-  const waiting = (workspace.referrals ?? []).filter((item) => item.status === "requested" || item.status === "responded");
+  const waiting = (workspace.referrals ?? []).filter((item) => item.status === "referred" || item.status === "in_review");
   const actions: string[] = [];
   if (overdue > 0) actions.push("1. Follow-up queue: review " + overdue + " item(s) due today or overdue, starting with the oldest and most important relationship.");
   if (missing.length) actions.push((actions.length + 1) + ". Add a dated next action for " + missing.slice(0, 3).map((item) => item.company + " — " + item.role).join(", ") + ".");

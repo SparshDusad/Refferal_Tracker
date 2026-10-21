@@ -150,8 +150,14 @@ export default function HomePage() {
   const interviews=referralRequests.filter(r=>r.status==="interview").length;
   const offers=referralRequests.filter(r=>r.status==="hired").length;
   const agentRecommendations=useMemo(()=>{
-    const items:{id:string;title:string;detail:string;actionLabel:string;kind:"follow-ups"|"application"|"contact"|"referral"|"templates"|"board";app?:ApplicationRecord}[]=[];
+    const items:{id:string;title:string;detail:string;actionLabel:string;kind:"follow-ups"|"application"|"contact"|"referral"|"templates"|"board";app?:ApplicationRecord;referral?:ReferralRequestRecord}[]=[];
     if(due>0)items.push({id:"due",title:"Clear your follow-up queue",detail:due+" item"+(due===1?" is":"s are")+" due today or overdue. A short, thoughtful follow-up can keep a conversation moving.",actionLabel:"Review follow-ups",kind:"follow-ups"});
+    const staleReferral=referralRequests.find(r=>["referred","in_review"].includes(r.status)&&Date.now()-new Date(r.updated_at).getTime()>7*86400000);
+    if(staleReferral){
+      const person=contacts.find(c=>c.id===staleReferral.contact_id);
+      const opportunity=apps.find(a=>a.id===staleReferral.application_id);
+      items.push({id:"referral-check-in",title:"Check in on a referral",detail:(person?.name??"A referred person")+" · "+(opportunity?.company??"the opportunity")+" has not been updated in over a week. Confirm progress and log the outcome.",actionLabel:"Review referral",kind:"referral",referral:staleReferral});
+    }
     const needsNextStep=apps.find(a=>!["offer","rejected"].includes(a.stage)&&!a.next_action);
     if(needsNextStep)items.push({id:"next-step",title:"Give an opportunity a next step",detail:needsNextStep.company+" · "+needsNextStep.role+" has no next action recorded. Add a concrete action and date so it doesn't go quiet.",actionLabel:"Update opportunity",kind:"application",app:needsNextStep});
     const saved=apps.find(a=>a.stage==="saved");
@@ -391,7 +397,7 @@ export default function HomePage() {
               <div className="agent-insight"><span>Needs attention</span><strong>{due} <small>due follow-ups</small></strong><p>{due===0?"No dated follow-ups are overdue today.":"Start with the most time-sensitive follow-up."}</p></div>
             </div>
             <div className="agent-plan-head"><div><h3>What you can do next</h3><p>Prioritized from the information currently in your workspace.</p></div><span className="agent-private"><ShieldCheck size={12}/>Private · no paid API</span></div>
-            {agentRecommendations.length?<div className="agent-recommendations">{agentRecommendations.map((item,index)=><div className="agent-recommendation" key={item.id}><span className="agent-step">{index+1}</span><div className="agent-recommendation-copy"><strong>{item.title}</strong><p>{item.detail}</p></div><button className="text-button agent-action" onClick={()=>{if(item.kind==="follow-ups")changeSection("follow-ups");else if(item.kind==="application"){setEditApp(item.app??null);setAppModal(true);}else if(item.kind==="contact"){setEditContact(null);setContactModal(true);}else if(item.kind==="referral"){setEditReferral(null);setReferralModal(true);}else changeSection(item.kind);}}>{item.actionLabel}<ArrowRight size={14}/></button></div>)}</div>:<Empty title="Your pipeline looks tidy" text="Keep your applications and next-action dates current. The agent will flag the next useful step as your workspace changes."/>}
+            {agentRecommendations.length?<div className="agent-recommendations">{agentRecommendations.map((item,index)=><div className="agent-recommendation" key={item.id}><span className="agent-step">{index+1}</span><div className="agent-recommendation-copy"><strong>{item.title}</strong><p>{item.detail}</p></div><button className="text-button agent-action" onClick={()=>{if(item.kind==="follow-ups")changeSection("follow-ups");else if(item.kind==="application"){setEditApp(item.app??null);setAppModal(true);}else if(item.kind==="contact"){setEditContact(null);setContactModal(true);}else if(item.kind==="referral"){setEditReferral(item.referral??null);setReferralModal(true);}else changeSection(item.kind);}}>{item.actionLabel}<ArrowRight size={14}/></button></div>)}</div>:<Empty title="Your pipeline looks tidy" text="Keep your applications and next-action dates current. The agent will flag the next useful step as your workspace changes."/>}
             <form className="agent-ask" onSubmit={e=>void askAgent(e)}>
               <label htmlFor="agent-question">Ask your referral copilot</label>
               <textarea id="agent-question" rows={2} maxLength={500} value={agentQuestion} onChange={e=>setAgentQuestion(e.target.value)} placeholder="e.g. Which referral should I follow up on first, and why?"/>

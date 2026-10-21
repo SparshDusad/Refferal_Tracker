@@ -105,6 +105,11 @@ export default function HomePage() {
     const {data:listener}=supabase.auth.onAuthStateChange((_event,next)=>{setSession(next);setAuthReady(true);});
     return ()=>listener.subscription.unsubscribe();
   },[]);
+  // Never carry one account's private records across sign-in, sign-out, or account switching.
+  useEffect(()=>{
+    setApps([]);setContacts([]);setReferralRequests([]);setActivity([]);setTemplates([]);
+    setAgentAnswer("");setAgentQuestion("");setAgentMode(null);setAgentRefreshedAt(null);
+  },[session?.user.id]);
   useEffect(()=>{
     const saved=window.localStorage.getItem("referralflow-theme");
     if(saved==="light"||saved==="dark")setTheme(saved);

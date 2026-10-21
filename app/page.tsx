@@ -8,9 +8,9 @@ import {
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import { APPLICATION_STAGES, STAGE_COLORS, STAGE_LABELS, type ApplicationRecord, type ApplicationStage, type ContactRecord, type OutreachTemplate, type Priority } from "@/lib/types";
+import { APPLICATION_STAGES, STAGE_COLORS, STAGE_LABELS, type ApplicationRecord, type ApplicationStage, type ContactRecord, type OutreachTemplate, type Priority, type ReferralRequestRecord, type ReferralRequestStatus } from "@/lib/types";
 
-type Section = "overview" | "applications" | "board" | "contacts" | "follow-ups" | "templates";
+type Section = "overview" | "applications" | "board" | "contacts" | "referrals" | "follow-ups" | "templates";
 type ToastState = { message: string; error?: boolean } | null;
 const today = () => new Date().toISOString().slice(0, 10);
 const daysFromNow = (days: number) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
@@ -40,6 +40,7 @@ const initialTemplates: OutreachTemplate[] = [
   { key:"gentle_follow_up", title:"Gentle follow-up", channel:"follow_up", subject:"Following up — {role} at {company}", body:"Hi {name},\n\nI wanted to gently follow up on my note about the {role} opportunity at {company}. I know things get busy, so no pressure if you haven’t had a chance to look at it yet.\n\nThanks again for your time!\n{your_name}" },
 ];
 const stages = APPLICATION_STAGES.map(value => ({ value, label:STAGE_LABELS[value] }));
+const referralStatuses: {value:ReferralRequestStatus;label:string}[] = [{value:"draft",label:"Draft"},{value:"ready_to_send",label:"Ready to send"},{value:"requested",label:"Requested"},{value:"responded",label:"Responded"},{value:"referred",label:"Referred"},{value:"declined",label:"Declined"},{value:"closed",label:"Closed"}];
 
 function parseCsv(text: string): Record<string, string>[] {
   const all: string[][] = []; let row:string[]=[]; let cell=""; let quoted=false;
@@ -64,6 +65,7 @@ export default function HomePage() {
   const [theme,setTheme]=useState<"light"|"dark">("light");
   const [apps,setApps]=useState<ApplicationRecord[]>(initialApps);
   const [contacts,setContacts]=useState<ContactRecord[]>(initialContacts);
+  const [referralRequests,setReferralRequests]=useState<ReferralRequestRecord[]>([]);
   const [templates,setTemplates]=useState<OutreachTemplate[]>(initialTemplates);
   const [session,setSession]=useState<Session|null>(null);
   const [authReady,setAuthReady]=useState(!isSupabaseConfigured);
@@ -73,6 +75,8 @@ export default function HomePage() {
   const [editApp,setEditApp]=useState<ApplicationRecord|null>(null);
   const [contactModal,setContactModal]=useState(false);
   const [editContact,setEditContact]=useState<ContactRecord|null>(null);
+  const [referralModal,setReferralModal]=useState(false);
+  const [editReferral,setEditReferral]=useState<ReferralRequestRecord|null>(null);
   const [authModal,setAuthModal]=useState(false);
   const [email,setEmail]=useState("");
   const [busy,setBusy]=useState(false);
@@ -94,13 +98,15 @@ export default function HomePage() {
   const loadCloud=useCallback(async()=>{
     if(!cloudReady)return;
     const supabase=createClient();
-    const [a,c,t]=await Promise.all([
+    const [a,c,t,r]=await Promise.all([
       supabase.from("applications").select("*").order("updated_at",{ascending:false}),
       supabase.from("contacts").select("*").order("created_at",{ascending:false}),
       supabase.from("outreach_templates").select("*").order("title"),
+      supabase.from("referral_requests").select("*").order("updated_at",{ascending:false}),
     ]);
     if(a.error)notify("Could not load applications: "+a.error.message,true);else setApps((a.data??[]) as ApplicationRecord[]);
     if(c.error)notify("Could not load contacts: "+c.error.message,true);else setContacts((c.data??[]) as ContactRecord[]);
+    if(r.error)notify("Could not load referral requests: "+r.error.message,true);else setReferralRequests((r.data??[]) as ReferralRequestRecord[]);
     if(t.error){
       notify("Could not load templates. Apply the latest schema in Supabase.",true);
     }else if(t.data?.length){
@@ -176,6 +182,47 @@ export default function HomePage() {
     if(cloudReady){const {error}=await createClient().from("contacts").delete().eq("id",c.id);if(error){notify("Could not delete contact: "+error.message,true);return;}}
     setContacts(cur=>cur.filter(x=>x.id!==c.id));notify("Contact deleted.");
   }
+  async function saveReferralRequest(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();
+    if(!apps.length||!contacts.length){notify("Add an application and a contact before tracking a referral request.",true);return;}
+    const f=new FormData(e.currentTarget);
+    const application_id=String(f.get("application_id")??"");
+    const contact_id=String(f.get("contact_id")??"");
+    const status=String(f.get("status")??"draft") as ReferralRequestStatus;
+    if(!apps.some(a=>a.id===application_id)||!contacts.some(c=>c.id===contact_id)){notify("Choose a valid application and contact.",true);return;}
+    const previous=editReferral;
+    const requested_at=status==="requested"?(previous?.requested_at??new Date().toISOString()):previous?.requested_at??null;
+    const responded_at=["responded","referred","declined","closed"].includes(status)?(previous?.responded_at??new Date().toISOString()):previous?.responded_at??null;
+    const record={application_id,contact_id,status,requested_at,responded_at,response_summary:String(f.get("response_summary")??"").trim()||null,outcome:String(f.get("outcome")??"").trim()||null,notes:String(f.get("notes")??"").trim()||null,updated_at:new Date().toISOString()};
+    setBusy(true);
+    if(cloudReady){
+      const sb=createClient();
+      const result=previous
+        ? await sb.from("referral_requests").update(record).eq("id",previous.id).select().single()
+        : await sb.from("referral_requests").insert({...record,user_id:session!.user.id}).select().single();
+      setBusy(false);
+      if(result.error){notify("Could not save referral request: "+result.error.message,true);return;}
+      const saved=result.data as ReferralRequestRecord;
+      setReferralRequests(cur=>previous?cur.map(x=>x.id===saved.id?saved:x):[saved,...cur]);
+    }else{
+      const now=new Date().toISOString();
+      const local:ReferralRequestRecord={...record,id:previous?.id??crypto.randomUUID(),user_id:"",created_at:previous?.created_at??now};
+      setReferralRequests(cur=>previous?cur.map(x=>x.id===local.id?local:x):[local,...cur]);
+      setBusy(false);
+    }
+    setReferralModal(false);setEditReferral(null);notify(previous?"Referral request updated.":"Referral request tracked.");
+  }
+  async function changeReferralStatus(request:ReferralRequestRecord,status:ReferralRequestStatus){
+    const patch={status,requested_at:status==="requested"?(request.requested_at??new Date().toISOString()):request.requested_at,responded_at:["responded","referred","declined","closed"].includes(status)?(request.responded_at??new Date().toISOString()):request.responded_at,updated_at:new Date().toISOString()};
+    if(cloudReady){const {data,error}=await createClient().from("referral_requests").update(patch).eq("id",request.id).select().single();if(error){notify("Could not update status: "+error.message,true);return;}setReferralRequests(cur=>cur.map(x=>x.id===request.id?data as ReferralRequestRecord:x));}
+    else setReferralRequests(cur=>cur.map(x=>x.id===request.id?{...x,...patch}:x));
+    notify("Referral status updated.");
+  }
+  async function deleteReferralRequest(request:ReferralRequestRecord){
+    if(!window.confirm("Delete this referral request?"))return;
+    if(cloudReady){const {error}=await createClient().from("referral_requests").delete().eq("id",request.id);if(error){notify("Could not delete referral request: "+error.message,true);return;}}
+    setReferralRequests(cur=>cur.filter(x=>x.id!==request.id));notify("Referral request deleted.");
+  }
   async function saveTemplate(t:OutreachTemplate){
     if(cloudReady){const {data,error}=await createClient().from("outreach_templates").upsert({...t,user_id:session!.user.id,updated_at:new Date().toISOString()},{onConflict:"user_id,key"}).select().single();if(error){notify("Could not save template: "+error.message,true);return;}setTemplates(cur=>cur.map(x=>x.key===t.key?data as OutreachTemplate:x));}
     else setTemplates(cur=>cur.map(x=>x.key===t.key?t:x));
@@ -220,11 +267,12 @@ export default function HomePage() {
     {id:"applications" as const,label:"Applications",icon:BriefcaseBusiness,count:apps.length},
     {id:"board" as const,label:"Pipeline board",icon:LayoutGrid},
     {id:"contacts" as const,label:"Contacts",icon:Users,count:contacts.length},
+    {id:"referrals" as const,label:"Referral requests",icon:Handshake,count:referralRequests.length},
     {id:"follow-ups" as const,label:"Follow-ups",icon:CalendarClock,count:due},
     {id:"templates" as const,label:"Message templates",icon:Mail},
   ];
-  const title:Record<Section,string>={overview:"Your career, in motion.",applications:"Applications",board:"Pipeline board",contacts:"Your network","follow-ups":"Follow-up queue",templates:"Outreach library"};
-  const subtitle:Record<Section,string>={overview:"A clear view of every opportunity and the next step to take.",applications:"Keep every role, status, and next action in one reliable place.",board:"Move opportunities across stages as your search progresses.",contacts:"Build useful relationships and keep referral context close at hand.","follow-ups":"Small, timely actions can keep good opportunities moving.",templates:"Reusable, editable messages that still sound like you."};
+  const title:Record<Section,string>={overview:"Your career, in motion.",applications:"Applications",board:"Pipeline board",contacts:"Your network",referrals:"Referral requests","follow-ups":"Follow-up queue",templates:"Outreach library"};
+  const subtitle:Record<Section,string>={overview:"A clear view of every opportunity and the next step to take.",applications:"Keep every role, status, and next action in one reliable place.",board:"Move opportunities across stages as your search progresses.",contacts:"Build useful relationships and keep referral context close at hand.",referrals:"Track each introduction from draft to referral outcome.","follow-ups":"Small, timely actions can keep good opportunities moving.",templates:"Reusable, editable messages that still sound like you."};
   const previewName=session?.user.email?.split("@")[0]?.replace(/[._-]+/g," ")??"Your workspace";
   const changeSection=(s:Section)=>{setSection(s);setMobileOpen(false);setStageFilter("all");};
 
@@ -247,6 +295,7 @@ export default function HomePage() {
           {section==="applications"&&<><input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={e=>void importCsv(e.target.files?.[0])}/><button className="button" onClick={()=>fileRef.current?.click()}><FileUp size={15}/>Import CSV</button><button className="button" onClick={exportCsv}><Download size={15}/>Export</button></>}
           {["overview","applications","board"].includes(section)&&<button className="button primary" onClick={()=>{setEditApp(null);setAppModal(true);}}><Plus size={16}/>Add application</button>}
           {section==="contacts"&&<button className="button primary" onClick={()=>{setEditContact(null);setContactModal(true);}}><Plus size={16}/>Add contact</button>}
+          {section==="referrals"&&<button className="button primary" onClick={()=>{setEditReferral(null);setReferralModal(true);}}><Plus size={16}/>Track referral</button>}
         </div></div>
 
         {section==="overview"&&<>
@@ -270,6 +319,9 @@ export default function HomePage() {
 
         {section==="board"&&<div className="board">{APPLICATION_STAGES.map(stage=>{const rows=apps.filter(a=>a.stage===stage&&(!search||(a.company+" "+a.role).toLowerCase().includes(search.toLowerCase())));return <div className="board-column" key={stage} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const id=e.dataTransfer.getData("text/plain");const a=apps.find(x=>x.id===id);if(a)void moveApp(a,stage);}}><div className="board-heading"><span className={"status "+STAGE_COLORS[stage]}>{STAGE_LABELS[stage]}</span><span className="count">{rows.length}</span></div>{rows.map(a=><article className="board-card" draggable key={a.id} onDragStart={e=>e.dataTransfer.setData("text/plain",a.id)}><div className="board-company"><div className="company-logo">{initials(a.company)}</div><div><strong>{a.company}</strong><span>{a.role}</span></div><button className="plain-icon" aria-label="Edit application" onClick={()=>{setEditApp(a);setAppModal(true);}}><Pencil size={13}/></button></div><div className="card-bottom"><span className={"priority "+a.priority}>● {a.priority}</span><span>{dateLabel(a.next_action_date)}</span></div>{a.next_action&&<p>{a.next_action}</p>}</article>)}{!rows.length&&<div className="column-empty">Drop a card here</div>}</div>;})}</div>}
 
+
+        {section==="referrals"&&<section className="panel"><PanelHeader title="Referral pipeline" subtitle="Track the request, response, and outcome for each introduction." side={<span className="status violet">{referralRequests.length} tracked</span>}/>{referralRequests.length?<div className="table-wrap"><table className="data-table"><thead><tr><th>Opportunity</th><th>Contact</th><th>Status</th><th>Requested</th><th>Response / outcome</th><th/></tr></thead><tbody>{referralRequests.map(request=>{const app=apps.find(a=>a.id===request.application_id);const contact=contacts.find(c=>c.id===request.contact_id);return <tr key={request.id}><td><strong>{app?.company??"Application"}</strong><small>{app?.role??"Linked application unavailable"}</small></td><td><strong>{contact?.name??"Contact"}</strong><small>{contact?.company??""}</small></td><td><select aria-label={"Status for "+(app?.company??"referral")} className="select-control" value={request.status} onChange={e=>void changeReferralStatus(request,e.target.value as ReferralRequestStatus)}>{referralStatuses.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}</select></td><td>{dateLabel(request.requested_at)}</td><td><span>{request.response_summary||request.outcome||request.notes||"—"}</span></td><td><div className="row-actions"><button className="plain-icon" aria-label="Edit referral request" onClick={()=>{setEditReferral(request);setReferralModal(true);}}><Pencil size={14}/></button><button className="plain-icon" aria-label="Delete referral request" onClick={()=>void deleteReferralRequest(request)}><Trash2 size={14}/></button></div></td></tr>;})}</tbody></table></div>:<Empty title="No referral requests yet" text="Pair a role with someone in your network and track the request through to an outcome." action="Track referral" onAction={()=>{setEditReferral(null);setReferralModal(true);}}/>}</section>}
+
         {section==="contacts"&&<>{contacts.filter(c=>!search||[c.name,c.company,c.role,c.email].some(v=>(v??"").toLowerCase().includes(search.toLowerCase()))).length?<div className="contact-grid">{contacts.filter(c=>!search||[c.name,c.company,c.role,c.email].some(v=>(v??"").toLowerCase().includes(search.toLowerCase()))).map(c=><article className="contact-card" key={c.id}><div className="contact-top"><div className="contact-avatar">{initials(c.name)}</div><div className="contact-title"><strong>{c.name}</strong><span>{c.role||"Contact"} · {c.company}</span></div><button className="plain-icon" aria-label="Edit contact" onClick={()=>{setEditContact(c);setContactModal(true);}}><Pencil size={14}/></button><button className="plain-icon" aria-label="Delete contact" onClick={()=>void deleteContact(c)}><Trash2 size={14}/></button></div><div className="contact-details">{c.email&&<span><Mail size={13}/>{c.email}</span>}{c.linkedin_url&&<a href={c.linkedin_url} target="_blank" rel="noreferrer"><ExternalLink size={13}/>LinkedIn profile</a>}{c.relationship&&<span><Users size={13}/>{c.relationship}</span>}</div>{c.notes&&<p>{c.notes}</p>}</article>)}</div>:<section className="panel"><Empty title="Your network starts here" text="Add people you know at companies you’re interested in. Keep their role, profile, and conversation context together." action="Add contact" onAction={()=>setContactModal(true)}/></section>}</>}
 
         {section==="follow-ups"&&<section className="panel"><PanelHeader title="Your follow-up list" subtitle="Dates are based on the next action set on each application." side={<span className="status amber">{due} due now</span>}/><div className="table-wrap"><table className="data-table"><thead><tr><th>Next action</th><th>Company / role</th><th>Due date</th><th>Stage</th><th>Priority</th><th/></tr></thead><tbody>{followUps.filter(a=>!search||(a.company+" "+a.role+" "+a.next_action).toLowerCase().includes(search.toLowerCase())).map(a=>{const d=dueIn(a.next_action_date);return <tr key={a.id}><td><strong>{a.next_action}</strong></td><td><strong>{a.company}</strong><small>{a.role}</small></td><td><span className={"due-label "+(d!==null&&d<0?"overdue":"")}>{d!==null&&d<0?Math.abs(d)+" days overdue":d===0?"Today":dateLabel(a.next_action_date)}</span></td><td><span className={"status "+STAGE_COLORS[a.stage]}>{STAGE_LABELS[a.stage]}</span></td><td><span className={"priority "+a.priority}>● {a.priority}</span></td><td><button className="plain-icon" aria-label="Edit follow-up" onClick={()=>{setEditApp(a);setAppModal(true);}}><Pencil size={14}/></button></td></tr>;})}</tbody></table></div>{!followUps.length&&<Empty title="Nothing on the calendar yet" text="Add a next action and date to an application to keep this queue updated." action="Add application" onAction={()=>setAppModal(true)}/>}</section>}
@@ -280,6 +332,7 @@ export default function HomePage() {
     </main>
     {appModal&&<AppModal key={editApp?.id??"new"} app={editApp} busy={busy} onClose={()=>{setAppModal(false);setEditApp(null);}} onSubmit={saveApp}/>}
     {contactModal&&<ContactModal key={editContact?.id??"new-contact"} contact={editContact} busy={busy} onClose={()=>{setContactModal(false);setEditContact(null);}} onSubmit={saveContact}/>}
+    {referralModal&&<ReferralModal key={editReferral?.id??"new-referral"} request={editReferral} applications={apps} contacts={contacts} busy={busy} onClose={()=>{setReferralModal(false);setEditReferral(null);}} onSubmit={saveReferralRequest}/>}
     {authModal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setAuthModal(false);}}><section className="modal modal-narrow" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div className="modal-head"><div><h2 id="auth-title">Your workspace, synced</h2><p>Sign in to securely access your data across devices.</p></div><button className="icon-button" aria-label="Close" onClick={()=>setAuthModal(false)}><X size={16}/></button></div><form className="modal-form" onSubmit={e=>void signIn(e)}><div className="auth-symbol"><ShieldCheck size={23}/></div><h2>Welcome back</h2><p>We’ll email you a secure sign-in link. No password to remember.</p><label className="field"><span>Email address</span><input type="email" required autoComplete="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)}/></label><button className="button primary full-width" type="submit" disabled={busy||!isSupabaseConfigured}>{busy?"Sending link…":<><Mail size={15}/>Email me a sign-in link</>}</button>{!isSupabaseConfigured&&<p className="modal-note">Add your Supabase project URL and publishable key to the environment first.</p>}<p className="modal-note">Your records are protected by database-level row policies. Messages are never sent automatically.</p></form></section></div>}
     {toast&&<div className={"toast "+(toast.error?"error":"")} role="status" aria-live="polite">{toast.error?<Activity size={17}/>:<CheckCircle2 size={17}/>}<span>{toast.message}</span></div>}
   </div>;
@@ -311,6 +364,11 @@ function AppModal({app,busy,onClose,onSubmit}:{app:ApplicationRecord|null;busy:b
   <label className="field"><span>Notes</span><textarea name="notes" maxLength={4000} placeholder="Referral context, prep, or other notes" defaultValue={app?.notes??""}/></label>
   </div><div className="form-footer"><span className="form-note"><i>*</i> Required fields</span><div><button className="button" type="button" onClick={onClose}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy?"Saving…":<><Check size={14}/>{app?"Save changes":"Add application"}</>}</button></div></div></form></section></div>;
 }
+
+function ReferralModal({request,applications,contacts,busy,onClose,onSubmit}:{request:ReferralRequestRecord|null;applications:ApplicationRecord[];contacts:ContactRecord[];busy:boolean;onClose:()=>void;onSubmit:(e:FormEvent<HTMLFormElement>)=>void}){
+  return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><section className="modal modal-narrow" role="dialog" aria-modal="true" aria-labelledby="referral-title"><div className="modal-head"><div><h2 id="referral-title">{request?"Update referral request":"Track a referral request"}</h2><p>Connect a role with someone who may be able to help.</p></div><button className="icon-button" aria-label="Close" onClick={onClose}><X size={16}/></button></div><form className="modal-form" onSubmit={onSubmit}><label className="field"><span>Application</span><select name="application_id" required defaultValue={request?.application_id??applications[0]?.id??""}>{applications.map(a=><option key={a.id} value={a.id}>{a.company} — {a.role}</option>)}</select></label><label className="field"><span>Contact</span><select name="contact_id" required defaultValue={request?.contact_id??contacts[0]?.id??""}>{contacts.map(c=><option key={c.id} value={c.id}>{c.name} — {c.company}</option>)}</select></label><label className="field"><span>Status</span><select name="status" defaultValue={request?.status??"draft"}>{referralStatuses.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}</select></label><label className="field"><span>Response summary</span><input name="response_summary" defaultValue={request?.response_summary??""} placeholder="e.g. Asked for an updated resume"/></label><label className="field"><span>Outcome</span><input name="outcome" defaultValue={request?.outcome??""} placeholder="e.g. Referral submitted"/></label><label className="field"><span>Notes</span><textarea name="notes" rows={3} defaultValue={request?.notes??""} placeholder="Context, next step, or what you discussed"/></label><div className="modal-actions"><button type="button" className="button" onClick={onClose}>Cancel</button><button type="submit" className="button primary" disabled={busy||!applications.length||!contacts.length}>{busy?"Saving…":request?"Save changes":"Track request"}</button></div>{(!applications.length||!contacts.length)&&<p className="modal-note">Add at least one application and one contact before tracking a referral.</p>}</form></section></div>;
+}
+
 function ContactModal({contact,busy,onClose,onSubmit}:{contact:ContactRecord|null;busy:boolean;onClose:()=>void;onSubmit:(e:FormEvent<HTMLFormElement>)=>void}){
   return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><section className="modal modal-narrow" role="dialog" aria-modal="true" aria-labelledby="contact-title"><div className="modal-head"><div><h2 id="contact-title">{contact?"Edit contact":"Add to your network"}</h2><p>Keep the useful context close by.</p></div><button className="icon-button" aria-label="Close" onClick={onClose}><X size={16}/></button></div><form className="modal-form" onSubmit={onSubmit}><div className="form-grid">
   <label className="field full"><span>Full name <i>*</i></span><input name="name" autoFocus required maxLength={120} placeholder="e.g. Priya Sharma" defaultValue={contact?.name??""}/></label>

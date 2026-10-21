@@ -42,13 +42,23 @@ create table if not exists public.application_contacts (
 create table if not exists public.referral_requests (
  id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade,
  application_id uuid not null, contact_id uuid not null,
- status text not null default 'draft' check(status in ('draft','ready_to_send','requested','responded','referred','declined','closed')),
+ status text not null default 'draft' check(status in ('draft','ready_to_send','referred','in_review','interview','hired','rejected','closed')),
  requested_at timestamptz, responded_at timestamptz, response_summary text, outcome text, notes text,
  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
  unique(id,user_id),
  foreign key(application_id,user_id) references public.applications(id,user_id) on delete cascade,
  foreign key(contact_id,user_id) references public.contacts(id,user_id) on delete cascade
 );
+-- Keep this schema safe to re-run when upgrading from the earlier "request a referral" workflow.
+alter table public.referral_requests drop constraint if exists referral_requests_status_check;
+update public.referral_requests set status = case status
+ when 'requested' then 'referred'
+ when 'responded' then 'in_review'
+ when 'declined' then 'rejected'
+ else status end
+where status in ('requested','responded','declined');
+alter table public.referral_requests add constraint referral_requests_status_check
+ check(status in ('draft','ready_to_send','referred','in_review','interview','hired','rejected','closed'));
 create index if not exists referral_requests_user_status on public.referral_requests(user_id,status);
 
 create table if not exists public.follow_ups (

@@ -47,6 +47,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Your session is no longer valid. Sign in again." }, { status: 401 });
   }
 
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (declaredLength > 100_000) return NextResponse.json({ error: "Workspace summary is too large." }, { status: 413 });
+
   let body: { question?: unknown; workspace?: Workspace };
   try {
     body = await request.json() as { question?: unknown; workspace?: Workspace };
@@ -70,7 +73,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ answer: fallbackAnswer(body.question.trim(), compactWorkspace), mode: "rules" as const });
   }
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
   try {
     const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(apiKey), {
       method: "POST",

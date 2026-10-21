@@ -125,6 +125,19 @@ export default function HomePage() {
   },[session?.user.id]);
   const themePersistenceReady=useRef(false);
   useEffect(()=>{
+    const activeModals=[appModal,contactModal,referralModal,authModal];
+    if(!activeModals.some(Boolean))return;
+    const dialog=document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
+    if(!dialog)return;
+    const focusable=()=>Array.from(dialog.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter(el=>!el.hasAttribute("hidden"));
+    const onDialogKeyDown=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){event.preventDefault();if(authModal)setAuthModal(false);else if(referralModal)setReferralModal(false);else if(contactModal)setContactModal(false);else if(appModal)setAppModal(false);return;}
+      if(event.key!=="Tab")return;const items=focusable();if(!items.length)return;const first=items[0],last=items[items.length-1];
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    };
+    dialog.addEventListener("keydown",onDialogKeyDown);return ()=>dialog.removeEventListener("keydown",onDialogKeyDown);
+  },[appModal,contactModal,referralModal,authModal]);
+  useEffect(()=>{
     const onShortcut=(event:KeyboardEvent)=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==="k"){event.preventDefault();searchInputRef.current?.focus();}};
     window.addEventListener("keydown",onShortcut);return ()=>window.removeEventListener("keydown",onShortcut);
   },[]);

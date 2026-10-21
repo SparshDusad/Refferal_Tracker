@@ -6,5 +6,6 @@ export type ContactRecord = { id:string; user_id:string; name:string; company:st
 export type OutreachTemplate = { id?:string; user_id?:string; key:string; title:string; channel:"linkedin"|"email"|"follow_up"; subject:string; body:string; updated_at?:string };
 export type ReferralRequestStatus = "draft" | "ready_to_send" | "requested" | "responded" | "referred" | "declined" | "closed";
 export type ReferralRequestRecord = { id:string; user_id:string; application_id:string; contact_id:string; status:ReferralRequestStatus; requested_at:string|null; responded_at:string|null; response_summary:string|null; outcome:string|null; notes:string|null; created_at:string; updated_at:string };
+export type ActivityEventRecord = { id:string; user_id:string; entity_type:"application"|"contact"|"referral_request"|"follow_up"|"template"; entity_id:string|null; action:string; summary:string; metadata:Record<string,unknown>; created_at:string };
 export const STAGE_LABELS:Record<ApplicationStage,string> = {saved:"Saved",referral_requested:"Referral requested",applied:"Applied",interview:"Interview",offer:"Offer",rejected:"Rejected"};
 export const STAGE_COLORS:Record<ApplicationStage,string> = {saved:"slate",referral_requested:"violet",applied:"blue",interview:"amber",offer:"green",rejected:"rose"};

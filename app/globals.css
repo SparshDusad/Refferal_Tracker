@@ -77,3 +77,10 @@
 .creator-contact>div{max-width:650px}
 .creator-disclaimer{margin:0;color:var(--subtle);font-size:11px;text-align:center}
 @media(max-width:650px){.creator-hero{flex-direction:column;gap:16px}.creator-detail-grid{grid-template-columns:1fr}.creator-contact{align-items:flex-start;flex-direction:column}.creator-links .button{flex:1}}
+
+
+.creator-x-mark{display:inline-flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;line-height:1}
+.creator-contact-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.creator-contact-links a{display:inline-flex;align-items:center;gap:7px;max-width:100%;color:var(--brand-strong);font-size:13px;font-weight:700;text-decoration:none;overflow-wrap:anywhere}
+.creator-contact-links a:hover{text-decoration:underline}
+.creator-contact-links a:focus-visible{outline:2px solid var(--brand-strong);outline-offset:3px;border-radius:4px}

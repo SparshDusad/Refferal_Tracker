@@ -419,7 +419,7 @@ export default function HomePage() {
           <section className="panel agent-panel" aria-labelledby="career-agent-title">
             <div className="agent-heading">
               <div className="agent-brand"><span className="agent-symbol"><Sparkles size={18}/></span><div><div className="agent-eyebrow">AGENTIC AI · CAREER COPILOT</div><h2 id="career-agent-title">Your progress, understood.</h2><p>I review your pipeline and turn it into practical next steps.</p></div></div>
-              <button className="button small" onClick={()=>setAgentRefreshedAt(new Date())}><Activity size={14}/>Reassess</button>
+              <button className="button small" onClick={()=>setAgentRefreshedAt(new Date())}><Activity size={14}/>Mark reviewed</button>
             </div>
             <div className="agent-insights">
               <div className="agent-insight"><span>What you’ve done</span><strong>{apps.length} <small>opportunities</small></strong><p>{contacts.length} contacts · {referralRequests.length} tracked referrals</p></div>

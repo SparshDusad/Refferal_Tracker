@@ -21,7 +21,8 @@ This repository is being developed directly on `main` at the owner's request. Wo
 - Replace demo data with real data when a project is configured
 
 ## Milestone 3 — Activity history, quality, and production readiness
-- Write and display user-scoped activity events for key changes
+- Write and display user-scoped activity events for application, contact, and referral changes
+- Add an authenticated ReferralFlow Copilot with deterministic guidance and optional server-side Gemini generation
 - Add unit and end-to-end tests for core flows
 - Validate database constraints, URL inputs, and CSV edge cases
 - Add accessible form labels, keyboard/focus behavior, and responsive checks
@@ -30,6 +31,7 @@ This repository is being developed directly on `main` at the owner's request. Wo
 
 ## Milestone 4 — Optional enhancements
 - Calendar integration, browser-assisted capture, and reminders only when useful
+- Optional generative agent responses via server-side `GEMINI_API_KEY`; never required for core tracking or built-in recommendations
 - No paid API is required for the core tracking workflow
 
 ## Local development

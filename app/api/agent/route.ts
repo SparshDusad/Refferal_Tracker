@@ -12,6 +12,17 @@ type Workspace = {
   recentActivity?: Array<{ summary?: string; createdAt?: string }>;
 };
 
+class RequestBodyTooLargeError extends Error {}
+
+async function readLimitedBody(request: Request, limit: number): Promise<string> {
+  const reader=request.body?.getReader();
+  if(!reader)return "";
+  const chunks:Uint8Array[]=[];let total=0;
+  while(true){const {done,value}=await reader.read();if(done)break;if(!value)continue;total+=value.byteLength;if(total>limit){await reader.cancel();throw new RequestBodyTooLargeError();}chunks.push(value);}
+  const bytes=new Uint8Array(total);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+  return new TextDecoder().decode(bytes);
+}
+
 function fallbackAnswer(question: string, workspace: Workspace) {
   const summary = workspace.summary ?? {};
   const apps = workspace.applications ?? [];
@@ -47,26 +58,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Your session is no longer valid. Sign in again." }, { status: 401 });
   }
 
-  const declaredLength = Number(request.headers.get("content-length") ?? "0");
-  if (declaredLength > 100_000) return NextResponse.json({ error: "Workspace summary is too large." }, { status: 413 });
-
   let body: { question?: unknown; workspace?: Workspace };
   try {
-    body = await request.json() as { question?: unknown; workspace?: Workspace };
-  } catch {
+    const raw=await readLimitedBody(request,100_000);
+    body=JSON.parse(raw) as { question?: unknown; workspace?: Workspace };
+  } catch (error) {
+    if(error instanceof RequestBodyTooLargeError)return NextResponse.json({error:"Workspace summary is too large."},{status:413});
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
   if (typeof body.question !== "string" || !body.question.trim() || body.question.length > 500) {
     return NextResponse.json({ error: "Ask a question between 1 and 500 characters." }, { status: 400 });
   }
 
-  const workspace = body.workspace ?? {};
+  const rawWorkspace = body.workspace && typeof body.workspace === "object" ? body.workspace : {};
+  const asRecords = <T,>(value: unknown, limit: number): T[] => Array.isArray(value) ? value.filter((item): item is T => Boolean(item) && typeof item === "object" && !Array.isArray(item)).slice(0,limit) : [];
+  const workspace = rawWorkspace as Workspace;
   const compactWorkspace: Workspace = {
-    summary: workspace.summary,
-    applications: (workspace.applications ?? []).slice(0, 50),
-    contacts: (workspace.contacts ?? []).slice(0, 50),
-    referrals: (workspace.referrals ?? []).slice(0, 50),
-    recentActivity: (workspace.recentActivity ?? []).slice(0, 10),
+    summary: workspace.summary && typeof workspace.summary === "object" ? workspace.summary : {},
+    applications: asRecords<NonNullable<Workspace["applications"]>[number]>(workspace.applications,50),
+    contacts: asRecords<NonNullable<Workspace["contacts"]>[number]>(workspace.contacts,50),
+    referrals: asRecords<NonNullable<Workspace["referrals"]>[number]>(workspace.referrals,50),
+    recentActivity: asRecords<NonNullable<Workspace["recentActivity"]>[number]>(workspace.recentActivity,10),
   };
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {

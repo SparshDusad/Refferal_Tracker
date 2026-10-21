@@ -5,7 +5,8 @@ A lightweight career CRM for job applications, referral contacts, outreach templ
 ## Current milestone
 
 - Next.js App Router, TypeScript, Tailwind CSS, and Supabase clients
-- Dashboard, application pipeline, contact directory, follow-up queue, and editable templates
+- Dashboard, application pipeline, contact directory, follow-up queue, referral-request pipeline, and editable templates
+- Per-user Supabase persistence for applications, contacts, referral requests, and templates; new accounts receive their own default outreach templates
 - CSV import/export, light/dark mode, and mobile-responsive layouts
 - PostgreSQL schema with row-level security (RLS) for per-user data isolation
 

@@ -38,6 +38,8 @@ create table if not exists public.application_contacts (
  foreign key(application_id,user_id) references public.applications(id,user_id) on delete cascade,
  foreign key(contact_id,user_id) references public.contacts(id,user_id) on delete cascade
 );
+create index if not exists application_contacts_application_user_idx on public.application_contacts(application_id,user_id);
+create index if not exists application_contacts_contact_user_idx on public.application_contacts(contact_id,user_id);
 
 create table if not exists public.referral_requests (
  id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade,
@@ -60,6 +62,9 @@ where status in ('requested','responded','declined');
 alter table public.referral_requests add constraint referral_requests_status_check
  check(status in ('draft','ready_to_send','referred','in_review','interview','hired','rejected','closed'));
 create index if not exists referral_requests_user_status on public.referral_requests(user_id,status);
+create index if not exists referral_requests_application_user_idx on public.referral_requests(application_id,user_id);
+create index if not exists referral_requests_contact_user_idx on public.referral_requests(contact_id,user_id);
+create unique index if not exists referral_requests_unique_person_opportunity on public.referral_requests(user_id,application_id,contact_id);
 
 create table if not exists public.follow_ups (
  id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade,
@@ -74,6 +79,9 @@ create table if not exists public.follow_ups (
  foreign key(referral_request_id,user_id) references public.referral_requests(id,user_id) on delete cascade
 );
 create index if not exists follow_ups_user_due on public.follow_ups(user_id,due_at) where status='open';
+create index if not exists follow_ups_application_user_idx on public.follow_ups(application_id,user_id) where application_id is not null;
+create index if not exists follow_ups_contact_user_idx on public.follow_ups(contact_id,user_id) where contact_id is not null;
+create index if not exists follow_ups_referral_user_idx on public.follow_ups(referral_request_id,user_id) where referral_request_id is not null;
 
 create table if not exists public.outreach_templates (
  id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade,
@@ -119,33 +127,33 @@ create trigger outreach_templates_updated_at before update on public.outreach_te
 
 alter table public.profiles enable row level security;
 drop policy if exists "Users read own profile" on public.profiles;
-create policy "Users read own profile" on public.profiles for select using(auth.uid()=id);
+create policy "Users read own profile" on public.profiles for select using((select auth.uid())=id);
 drop policy if exists "Users update own profile" on public.profiles;
-create policy "Users update own profile" on public.profiles for update using(auth.uid()=id) with check(auth.uid()=id);
+create policy "Users update own profile" on public.profiles for update using((select auth.uid())=id) with check((select auth.uid())=id);
 
 alter table public.applications enable row level security;
 drop policy if exists "Users manage own applications" on public.applications;
-create policy "Users manage own applications" on public.applications for all using(auth.uid()=user_id) with check(auth.uid()=user_id);
+create policy "Users manage own applications" on public.applications for all using((select auth.uid())=user_id) with check((select auth.uid())=user_id);
 alter table public.contacts enable row level security;
 drop policy if exists "Users manage own contacts" on public.contacts;
-create policy "Users manage own contacts" on public.contacts for all using(auth.uid()=user_id) with check(auth.uid()=user_id);
+create policy "Users manage own contacts" on public.contacts for all using((select auth.uid())=user_id) with check((select auth.uid())=user_id);
 alter table public.application_contacts enable row level security;
 drop policy if exists "Users manage own application contacts" on public.application_contacts;
-create policy "Users manage own application contacts" on public.application_contacts for all using(auth.uid()=user_id) with check(auth.uid()=user_id);
+create policy "Users manage own application contacts" on public.application_contacts for all using((select auth.uid())=user_id) with check((select auth.uid())=user_id);
 alter table public.referral_requests enable row level security;
 drop policy if exists "Users manage own referral requests" on public.referral_requests;
-create policy "Users manage own referral requests" on public.referral_requests for all using(auth.uid()=user_id) with check(auth.uid()=user_id);
+create policy "Users manage own referral requests" on public.referral_requests for all using((select auth.uid())=user_id) with check((select auth.uid())=user_id);
 alter table public.follow_ups enable row level security;
 drop policy if exists "Users manage own follow ups" on public.follow_ups;
-create policy "Users manage own follow ups" on public.follow_ups for all using(auth.uid()=user_id) with check(auth.uid()=user_id);
+create policy "Users manage own follow ups" on public.follow_ups for all using((select auth.uid())=user_id) with check((select auth.uid())=user_id);
 alter table public.outreach_templates enable row level security;
 drop policy if exists "Users manage own templates" on public.outreach_templates;
-create policy "Users manage own templates" on public.outreach_templates for all using(auth.uid()=user_id) with check(auth.uid()=user_id);
+create policy "Users manage own templates" on public.outreach_templates for all using((select auth.uid())=user_id) with check((select auth.uid())=user_id);
 alter table public.activity_events enable row level security;
 drop policy if exists "Users read own activity" on public.activity_events;
-create policy "Users read own activity" on public.activity_events for select using(auth.uid()=user_id);
+create policy "Users read own activity" on public.activity_events for select using((select auth.uid())=user_id);
 drop policy if exists "Users insert own activity" on public.activity_events;
-create policy "Users insert own activity" on public.activity_events for insert with check(auth.uid()=user_id);
+create policy "Users insert own activity" on public.activity_events for insert with check((select auth.uid())=user_id);
 
 grant select,insert,update,delete on public.applications,public.contacts,public.application_contacts,public.referral_requests,public.follow_ups,public.outreach_templates to authenticated;
 grant select,insert on public.activity_events to authenticated;

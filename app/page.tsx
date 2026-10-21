@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
-  Activity, ArrowRight, Bell, BriefcaseBusiness, CalendarClock, Check, CheckCircle2, ChevronRight,
+  Activity, ArrowRight, BriefcaseBusiness, CalendarClock, Check, CheckCircle2, ChevronRight,
   Clipboard, Download, ExternalLink, FileUp, Filter, Handshake, LayoutDashboard, LayoutGrid, LogIn,
   LogOut, Mail, Menu, Moon, Pencil, Plus, Search, ShieldCheck, Sparkles, Sun, Trash2, Users, X,
 } from "lucide-react";

@@ -347,9 +347,12 @@ export default function HomePage() {
       if(!("company" in rows[0])||!("role" in rows[0]))throw new Error("CSV headers must include company and role.");
       const known=new Set(apps.map(a=>(a.company+"|"+a.role).toLowerCase().replace(/\s+/g," ").trim()));
       const clean:Record<string,unknown>[]=[];let duplicates=0,skipped=0;
-      for(const row of rows){const company=(row.company??"").trim(),role=(row.role??"").trim();if(!company||!role){skipped++;continue;}
+      for(const row of rows){const company=(row.company??"").trim(),role=(row.role??"").trim();if(!company||!role||company.length>120||role.length>160){skipped++;continue;}
         const key=(company+"|"+role).toLowerCase().replace(/\s+/g," ").trim();if(known.has(key)){duplicates++;continue;}known.add(key);
         const job=(row.job_url??"").trim();const priority=["low","normal","high"].includes(row.priority??"")?row.priority:"normal";
+        const appliedAt=(row.applied_at??"").trim(),dueAt=(row.next_action_date??"").trim();
+        const isDate=(value:string)=>!value||(/^\\d{4}-\\d{2}-\\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value+"T12:00:00Z")));
+        if(!isDate(appliedAt)||!isDate(dueAt)){skipped++;continue;}
         clean.push({company,role,stage:toStage(row.stage??"saved"),job_url:/^https?:\/\/.+/i.test(job)?job:null,location:(row.location??"").trim()||null,priority,applied_at:(row.applied_at??"").trim()||null,next_action:(row.next_action??"").trim()||null,next_action_date:(row.next_action_date??"").trim()||null,notes:(row.notes??"").trim()||null,...(cloudReady?{user_id:session!.user.id}:{user_id:""})});
       }
       if(!clean.length){notify("Nothing imported. "+duplicates+" duplicate(s), "+skipped+" incomplete row(s).",true);return;}

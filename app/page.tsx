@@ -360,7 +360,7 @@ export default function HomePage() {
         const key=(company+"|"+role).toLowerCase().replace(/\s+/g," ").trim();if(known.has(key)){duplicates++;continue;}known.add(key);
         const job=(row.job_url??"").trim();const priority=["low","normal","high"].includes(row.priority??"")?row.priority:"normal";
         const appliedAt=(row.applied_at??"").trim(),dueAt=(row.next_action_date??"").trim();
-        const isDate=(value:string)=>!value||(/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value+"T12:00:00Z")));
+        const isDate=(value:string)=>{if(!value)return true;if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const parsed=new Date(value+"T12:00:00Z");return !Number.isNaN(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;};
         if(!isDate(appliedAt)||!isDate(dueAt)){skipped++;continue;}
         clean.push({company,role,stage:toStage(row.stage??"saved"),job_url:/^https?:\/\/.+/i.test(job)?job:null,location:(row.location??"").trim()||null,priority,applied_at:(row.applied_at??"").trim()||null,next_action:(row.next_action??"").trim()||null,next_action_date:(row.next_action_date??"").trim()||null,notes:(row.notes??"").trim()||null,...(cloudReady?{user_id:session!.user.id}:{user_id:""})});
       }

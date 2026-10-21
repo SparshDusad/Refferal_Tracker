@@ -82,6 +82,10 @@ export default function HomePage() {
   const [email,setEmail]=useState("");
   const [busy,setBusy]=useState(false);
   const [agentRefreshedAt,setAgentRefreshedAt]=useState<Date|null>(null);
+  const [agentQuestion,setAgentQuestion]=useState("");
+  const [agentAnswer,setAgentAnswer]=useState("");
+  const [agentMode,setAgentMode]=useState<"gemini"|"rules"|null>(null);
+  const [agentBusy,setAgentBusy]=useState(false);
   const [toast,setToast]=useState<ToastState>(null);
   const [mobileOpen,setMobileOpen]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
@@ -177,17 +181,19 @@ export default function HomePage() {
       const now=new Date().toISOString();const local:ApplicationRecord={...record,id:editApp?.id??crypto.randomUUID(),user_id:"",created_at:editApp?.created_at??now};
       setApps(current=>editApp?current.map(a=>a.id===local.id?local:a):[local,...current]);setBusy(false);
     }
+    if(cloudReady){const current=apps.find(a=>a.id===editApp?.id);const targetCompany=company;void recordActivity("application",editApp?.id??null,editApp?"updated":"created",(editApp?"Updated":"Added")+" opportunity: "+targetCompany+" — "+role+".");}
     setAppModal(false);setEditApp(null);notify(editApp?"Application updated.":"Application added.");
   }
   async function deleteApp(a:ApplicationRecord){
     if(!window.confirm("Delete the "+a.role+" application at "+a.company+"? This cannot be undone."))return;
     if(cloudReady){const {error}=await createClient().from("applications").delete().eq("id",a.id);if(error){notify("Could not delete: "+error.message,true);return;}}
-    setApps(current=>current.filter(x=>x.id!==a.id));notify("Application deleted.");
+    setApps(current=>current.filter(x=>x.id!==a.id));void recordActivity("application",a.id,"deleted","Deleted opportunity: "+a.company+" — "+a.role+".");notify("Application deleted.");
   }
   async function moveApp(a:ApplicationRecord,stage:ApplicationStage){
     if(a.stage===stage)return;const patch={stage,updated_at:new Date().toISOString()};
     if(cloudReady){const {data,error}=await createClient().from("applications").update(patch).eq("id",a.id).select().single();if(error){notify("Could not change stage: "+error.message,true);return;}setApps(current=>current.map(x=>x.id===a.id?data as ApplicationRecord:x));}
     else setApps(current=>current.map(x=>x.id===a.id?{...x,...patch}:x));
+    void recordActivity("application",a.id,"stage_changed","Moved "+a.company+" — "+a.role+" to "+STAGE_LABELS[stage]+".");
     notify("Moved to "+STAGE_LABELS[stage]+".");
   }
   async function saveContact(e:FormEvent<HTMLFormElement>){
@@ -199,12 +205,13 @@ export default function HomePage() {
     setBusy(true);
     if(cloudReady){const sb=createClient();const result=editContact?await sb.from("contacts").update(record).eq("id",editContact.id).select().single():await sb.from("contacts").insert({...record,user_id:session!.user.id}).select().single();setBusy(false);if(result.error){notify("Could not save contact: "+result.error.message,true);return;}const saved=result.data as ContactRecord;setContacts(cur=>editContact?cur.map(c=>c.id===saved.id?saved:c):[saved,...cur]);}
     else{const local:ContactRecord={...record,id:editContact?.id??crypto.randomUUID(),user_id:"",created_at:editContact?.created_at??new Date().toISOString()};setContacts(cur=>editContact?cur.map(c=>c.id===local.id?local:c):[local,...cur]);setBusy(false);}
+    void recordActivity("contact",editContact?.id??null,editContact?"updated":"created",(editContact?"Updated":"Added")+" contact: "+name+" at "+company+".");
     setContactModal(false);setEditContact(null);notify(editContact?"Contact updated.":"Contact added.");
   }
   async function deleteContact(c:ContactRecord){
     if(!window.confirm("Delete "+c.name+" from your contacts?"))return;
     if(cloudReady){const {error}=await createClient().from("contacts").delete().eq("id",c.id);if(error){notify("Could not delete contact: "+error.message,true);return;}}
-    setContacts(cur=>cur.filter(x=>x.id!==c.id));notify("Contact deleted.");
+    setContacts(cur=>cur.filter(x=>x.id!==c.id));void recordActivity("contact",c.id,"deleted","Deleted contact: "+c.name+" at "+c.company+".");notify("Contact deleted.");
   }
   async function saveReferralRequest(e:FormEvent<HTMLFormElement>){
     e.preventDefault();
@@ -253,6 +260,46 @@ export default function HomePage() {
     if(cloudReady){const {data,error}=await createClient().from("outreach_templates").upsert({...t,user_id:session!.user.id,updated_at:new Date().toISOString()},{onConflict:"user_id,key"}).select().single();if(error){notify("Could not save template: "+error.message,true);return;}setTemplates(cur=>cur.map(x=>x.key===t.key?data as OutreachTemplate:x));}
     else setTemplates(cur=>cur.map(x=>x.key===t.key?t:x));
     notify("Template saved.");
+  }
+  function localAgentAnswer(question:string){
+    const top=agentRecommendations.slice(0,3).map((item,index)=>(index+1)+". "+item.title+": "+item.detail).join("\\n");
+    const questionText=question.trim()?("You asked: "+question.trim()+"\\n\\n"):"";
+    return questionText+"Here is the best next-step plan from the data currently in this workspace.\\n"+
+      "Progress: "+apps.length+" opportunities, "+contacts.length+" contacts, "+referralRequests.length+" tracked referral requests, "+interviews+" interviews, and "+offers+" offers.\\n"+
+      "Follow-ups due or overdue: "+due+".\\n\\n"+
+      (top||"No urgent recommendation is available yet. Add a next action and due date to each active referral or opportunity, then reassess.")+
+      "\\n\\nThis is the built-in rules-based mode. Configure GEMINI_API_KEY on the server for optional generative answers.";
+  }
+  async function askAgent(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();
+    const question=agentQuestion.trim();
+    if(!question){notify("Ask a question first.",true);return;}
+    setAgentBusy(true);
+    try{
+      if(!cloudReady||!session?.access_token){
+        setAgentAnswer(localAgentAnswer(question));setAgentMode("rules");setAgentRefreshedAt(new Date());return;
+      }
+      const response=await fetch("/api/agent",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},
+        body:JSON.stringify({
+          question,
+          workspace:{
+            summary:{applications:apps.length,contacts:contacts.length,referralRequests:referralRequests.length,interviews,offers,dueFollowUps:due},
+            applications:apps.slice(0,50).map(a=>({company:a.company,role:a.role,stage:a.stage,nextAction:a.next_action,nextActionDate:a.next_action_date,priority:a.priority,notes:a.notes})),
+            contacts:contacts.slice(0,50).map(c=>({name:c.name,company:c.company,role:c.role,relationship:c.relationship})),
+            referrals:referralRequests.slice(0,50).map(r=>({status:r.status,application:apps.find(a=>a.id===r.application_id)?.company,role:apps.find(a=>a.id===r.application_id)?.role,contact:contacts.find(c=>c.id===r.contact_id)?.name,requestedAt:r.requested_at,responseSummary:r.response_summary,outcome:r.outcome,notes:r.notes})),
+            recentActivity:activity.slice(0,10).map(a=>({summary:a.summary,createdAt:a.created_at}))
+          }
+        })
+      });
+      const result=await response.json() as {answer?:string;mode?:"gemini"|"rules";error?:string};
+      if(!response.ok)throw new Error(result.error||"The agent could not answer right now.");
+      setAgentAnswer(result.answer||localAgentAnswer(question));setAgentMode(result.mode==="gemini"?"gemini":"rules");setAgentRefreshedAt(new Date());
+    }catch(error){
+      setAgentAnswer(localAgentAnswer(question)+"\\n\\nLive agent request unavailable: "+(error instanceof Error?error.message:"unknown error"));
+      setAgentMode("rules");setAgentRefreshedAt(new Date());
+    }finally{setAgentBusy(false);}
   }
   async function signIn(e:FormEvent<HTMLFormElement>){
     e.preventDefault();if(!isSupabaseConfigured){notify("Configure Supabase keys first.",true);return;}
@@ -317,7 +364,7 @@ export default function HomePage() {
       <header className="topbar"><div className="crumb"><button className="icon-button mobile-menu" onClick={()=>setMobileOpen(true)} aria-label="Open navigation"><Menu size={17}/></button><span>Workspace</span><ChevronRight size={13}/><strong>{nav.find(n=>n.id===section)?.label}</strong></div><div className="top-actions"><label className="search-box"><Search size={15}/><input aria-label="Search this workspace" placeholder="Search companies, roles…" value={search} onChange={e=>setSearch(e.target.value)}/><span className="shortcut">⌘ K</span></label><button className="icon-button" title={theme==="light"?"Switch to dark mode":"Switch to light mode"} aria-label={theme==="light"?"Switch to dark mode":"Switch to light mode"} onClick={()=>setTheme(t=>t==="light"?"dark":"light")}>{theme==="light"?<Moon size={16}/>:<Sun size={16}/>}</button><button className="icon-button" title={session?"Account connected":"Sign in to sync"} aria-label="Account" onClick={()=>session?notify("Signed in as "+session.user.email):setAuthModal(true)}>{session?<ShieldCheck size={16} color="var(--green)"/>:<Users size={16}/>}</button></div></header>
       <div className="page-content">
         {!cloudReady&&<div className="preview-notice"><Activity size={15}/><div><strong>{isSupabaseConfigured?"Preview mode · Sign in to sync":"Preview mode · Cloud not configured"}</strong> — {isSupabaseConfigured?"These edits are temporary until you sign in.":"Sample records are illustrative; edits are in-memory only and disappear after refresh."} {isSupabaseConfigured?<button className="text-button inline" onClick={()=>setAuthModal(true)}>Sign in <ArrowRight size={12}/></button>:<a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Set up Supabase <ExternalLink size={11}/></a>}</div></div>}
-        <div className="page-heading"><div><div className="eyebrow">{section==="overview"?"Wednesday · "+new Date().toLocaleDateString("en-IN",{month:"long",day:"numeric"}):"Your workspace"}</div><h1>{section==="overview"?"Good evening"+(session?", "+previewName.split(" ")[0]:"")+".":title[section]}</h1><p>{subtitle[section]}</p></div><div className="heading-actions">
+        <div className="page-heading"><div><div className="eyebrow">{section==="overview"?new Date().toLocaleDateString("en-IN",{weekday:"long",month:"long",day:"numeric"}):"Your workspace"}</div><h1>{section==="overview"?"Good evening"+(session?", "+previewName.split(" ")[0]:"")+".":title[section]}</h1><p>{subtitle[section]}</p></div><div className="heading-actions">
           {section==="applications"&&<><input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={e=>void importCsv(e.target.files?.[0])}/><button className="button" onClick={()=>fileRef.current?.click()}><FileUp size={15}/>Import CSV</button><button className="button" onClick={exportCsv}><Download size={15}/>Export</button></>}
           {["overview","applications","board"].includes(section)&&<button className="button primary" onClick={()=>{setEditApp(null);setAppModal(true);}}><Plus size={16}/>Add application</button>}
           {section==="contacts"&&<button className="button primary" onClick={()=>{setEditContact(null);setContactModal(true);}}><Plus size={16}/>Add contact</button>}
@@ -344,7 +391,13 @@ export default function HomePage() {
             </div>
             <div className="agent-plan-head"><div><h3>What you can do next</h3><p>Prioritized from the information currently in your workspace.</p></div><span className="agent-private"><ShieldCheck size={12}/>Private · no paid API</span></div>
             {agentRecommendations.length?<div className="agent-recommendations">{agentRecommendations.map((item,index)=><div className="agent-recommendation" key={item.id}><span className="agent-step">{index+1}</span><div className="agent-recommendation-copy"><strong>{item.title}</strong><p>{item.detail}</p></div><button className="text-button agent-action" onClick={()=>{if(item.kind==="follow-ups")changeSection("follow-ups");else if(item.kind==="application"){setEditApp(item.app??null);setAppModal(true);}else if(item.kind==="contact"){setEditContact(null);setContactModal(true);}else if(item.kind==="referral"){setEditReferral(null);setReferralModal(true);}else changeSection(item.kind);}}>{item.actionLabel}<ArrowRight size={14}/></button></div>)}</div>:<Empty title="Your pipeline looks tidy" text="Keep your applications and next-action dates current. The agent will flag the next useful step as your workspace changes."/>}
-            <div className="agent-footnote">{agentRefreshedAt?"Plan reassessed at "+agentRefreshedAt.toLocaleTimeString("en-IN",{hour:"numeric",minute:"2-digit"})+". ":""}Recommendations are generated from your saved workspace data; no messages are sent and no external AI service is called.</div>
+            <form className="agent-ask" onSubmit={e=>void askAgent(e)}>
+              <label htmlFor="agent-question">Ask your referral copilot</label>
+              <textarea id="agent-question" rows={2} maxLength={500} value={agentQuestion} onChange={e=>setAgentQuestion(e.target.value)} placeholder="e.g. Which referral should I follow up on first, and why?"/>
+              <div className="agent-ask-footer"><span>Gemini is optional. Without a server API key, the built-in rules-based coach still works.</span><button className="button primary small" type="submit" disabled={agentBusy||!agentQuestion.trim()}><Sparkles size={13}/>{agentBusy?"Thinking…":"Ask agent"}</button></div>
+            </form>
+            {agentAnswer&&<div className="agent-answer" aria-live="polite"><div className="agent-answer-head"><strong><Sparkles size={14}/>Copilot response</strong><span className="count">{agentMode==="gemini"?"Gemini":"Built-in agent"}</span></div><p>{agentAnswer}</p></div>}
+            <div className="agent-footnote">{agentRefreshedAt?"Last reassessed at "+agentRefreshedAt.toLocaleTimeString("en-IN",{hour:"numeric",minute:"2-digit"})+". ":""}The agent uses your workspace to suggest next steps. It never sends outreach messages or changes records without your action. {agentMode==="gemini"?"This answer was generated by Gemini from the summary you submitted.": "Built-in recommendations run without an external AI API."}</div>
           </section>
           <div className="dashboard-grid">
             <section className="panel"><PanelHeader title="Recent applications" subtitle="The latest roles in your pipeline" action="View all" onAction={()=>changeSection("applications")}/><AppTable rows={filtered.slice(0,5)} onEdit={a=>{setEditApp(a);setAppModal(true);}} onDelete={deleteApp} onMove={moveApp}/>{!filtered.length&&<Empty title="No matching applications" text="Try another search or add an opportunity." action="Add application" onAction={()=>{setEditApp(null);setAppModal(true);}}/>}</section>
@@ -370,7 +423,7 @@ export default function HomePage() {
         {section==="follow-ups"&&<section className="panel"><PanelHeader title="Your follow-up list" subtitle="Dates are based on the next action set on each application." side={<span className="status amber">{due} due now</span>}/><div className="table-wrap"><table className="data-table"><thead><tr><th>Next action</th><th>Company / role</th><th>Due date</th><th>Stage</th><th>Priority</th><th/></tr></thead><tbody>{followUps.filter(a=>!search||(a.company+" "+a.role+" "+a.next_action).toLowerCase().includes(search.toLowerCase())).map(a=>{const d=dueIn(a.next_action_date);return <tr key={a.id}><td><strong>{a.next_action}</strong></td><td><strong>{a.company}</strong><small>{a.role}</small></td><td><span className={"due-label "+(d!==null&&d<0?"overdue":"")}>{d!==null&&d<0?Math.abs(d)+" days overdue":d===0?"Today":dateLabel(a.next_action_date)}</span></td><td><span className={"status "+STAGE_COLORS[a.stage]}>{STAGE_LABELS[a.stage]}</span></td><td><span className={"priority "+a.priority}>● {a.priority}</span></td><td><button className="plain-icon" aria-label="Edit follow-up" onClick={()=>{setEditApp(a);setAppModal(true);}}><Pencil size={14}/></button></td></tr>;})}</tbody></table></div>{!followUps.length&&<Empty title="Nothing on the calendar yet" text="Add a next action and date to an application to keep this queue updated." action="Add application" onAction={()=>setAppModal(true)}/>}</section>}
 
         {section==="templates"&&<><div className="preview-notice"><Sparkles size={15}/><div><strong>Make it personal.</strong> Replace placeholders like <code>{"{name}"}</code> and <code>{"{company}"}</code> before sending. ReferralFlow never sends messages automatically.</div></div><div className="template-grid">{templates.map(t=><TemplateCard key={t.key+":"+(t.updated_at??"preview")} template={t} onSave={saveTemplate} onCopy={async text=>{try{await navigator.clipboard.writeText(text);notify("Message copied to clipboard.");}catch{notify("Clipboard permission was blocked.",true);}}}/>)}</div></>}
-        <footer className="app-footer"><div><span>Built for thoughtful job searching · Your data stays private to your account when cloud sync is configured.</span><span className="creator-signature">Designed & built by <strong>Sparsh Dusad</strong></span></div><a href="https://github.com/SparshDusad/Refferal_Tracker" target="_blank" rel="noreferrer" aria-label="View ReferralFlow source on GitHub"><span>Open-source project</span><ExternalLink size={13}/></a></footer>
+        <footer className="app-footer"><div><span>Built for thoughtful referral tracking · Your data stays private to your account when cloud sync is configured.</span><span className="creator-signature">Designed & engineered by <a href="https://github.com/SparshDusad" target="_blank" rel="noreferrer"><strong>Sparsh Dusad</strong></a><small>Agentic AI · Next.js · TypeScript · Supabase · Secure multi-user data</small></span></div><a href="https://github.com/SparshDusad/Refferal_Tracker" target="_blank" rel="noreferrer" aria-label="View ReferralFlow source on GitHub"><span>Open-source project</span><ExternalLink size={13}/></a></footer>
       </div>
     </main>
     {appModal&&<AppModal key={editApp?.id??"new"} app={editApp} busy={busy} onClose={()=>{setAppModal(false);setEditApp(null);}} onSubmit={saveApp}/>}

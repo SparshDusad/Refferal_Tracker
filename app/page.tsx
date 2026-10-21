@@ -192,7 +192,7 @@ export default function HomePage() {
   async function deleteApp(a:ApplicationRecord){
     if(!window.confirm("Delete the "+a.role+" application at "+a.company+"? This cannot be undone."))return;
     if(cloudReady){const {error}=await createClient().from("applications").delete().eq("id",a.id);if(error){notify("Could not delete: "+error.message,true);return;}}
-    setApps(current=>current.filter(x=>x.id!==a.id));void recordActivity("application",a.id,"deleted","Deleted opportunity: "+a.company+" — "+a.role+".");notify("Application deleted.");
+    setApps(current=>current.filter(x=>x.id!==a.id));setReferralRequests(current=>current.filter(x=>x.application_id!==a.id));void recordActivity("application",a.id,"deleted","Deleted opportunity: "+a.company+" — "+a.role+".");notify("Application deleted.");
   }
   async function moveApp(a:ApplicationRecord,stage:ApplicationStage){
     if(a.stage===stage)return;const patch={stage,updated_at:new Date().toISOString()};
@@ -215,7 +215,7 @@ export default function HomePage() {
   async function deleteContact(c:ContactRecord){
     if(!window.confirm("Remove "+c.name+" from your people tracker?"))return;
     if(cloudReady){const {error}=await createClient().from("contacts").delete().eq("id",c.id);if(error){notify("Could not delete contact: "+error.message,true);return;}}
-    setContacts(cur=>cur.filter(x=>x.id!==c.id));void recordActivity("contact",c.id,"deleted","Deleted contact: "+c.name+" at "+c.company+".");notify("Person removed from tracker.");
+    setContacts(cur=>cur.filter(x=>x.id!==c.id));setReferralRequests(cur=>cur.filter(x=>x.contact_id!==c.id));void recordActivity("contact",c.id,"deleted","Deleted person: "+c.name+" at "+c.company+".");notify("Person removed from tracker.");
   }
   async function saveReferralRequest(e:FormEvent<HTMLFormElement>){
     e.preventDefault();
@@ -361,7 +361,7 @@ export default function HomePage() {
   return <div className="app-frame">
     <div className={"mobile-overlay "+(mobileOpen?"shown":"")} onClick={()=>setMobileOpen(false)} aria-hidden="true"/>
     <aside className={"sidebar "+(mobileOpen?"mobile-open":"")} aria-label="Primary navigation">
-      <div className="brand"><div className="brand-mark"><Handshake size={20}/></div><div><div className="brand-name">ReferralFlow</div><div className="brand-caption">Your career command center</div></div></div>
+      <div className="brand"><div className="brand-mark"><Handshake size={20}/></div><div><div className="brand-name">ReferralFlow</div><div className="brand-caption">Your referral command center</div></div></div>
       <div className="nav-label">Workspace</div><nav className="nav-list">{nav.map(n=>{const I=n.icon;return <button key={n.id} className={"nav-item "+(section===n.id?"active":"")} onClick={()=>changeSection(n.id)} aria-current={section===n.id?"page":undefined}><I size={17}/><span>{n.label}</span>{n.count!==undefined&&n.count>0&&<span className="nav-count">{n.count}</span>}</button>;})}</nav>
       <div className="sidebar-spacer"/>
       <div className="tip-card"><div className="tip-title"><Sparkles size={15}/>Keep it moving</div><p>One thoughtful follow-up is often better than ten unanswered tabs.</p><button className="text-button" onClick={()=>changeSection("follow-ups")}>See next actions <ArrowRight size={13}/></button></div>
@@ -373,7 +373,7 @@ export default function HomePage() {
         {!cloudReady&&<div className="preview-notice"><Activity size={15}/><div><strong>{isSupabaseConfigured?"Preview mode · Sign in to sync":"Preview mode · Cloud not configured"}</strong> — {isSupabaseConfigured?"These edits are temporary until you sign in.":"Sample records are illustrative; edits are in-memory only and disappear after refresh."} {isSupabaseConfigured?<button className="text-button inline" onClick={()=>setAuthModal(true)}>Sign in <ArrowRight size={12}/></button>:<a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Set up Supabase <ExternalLink size={11}/></a>}</div></div>}
         <div className="page-heading"><div><div className="eyebrow">{section==="overview"?new Date().toLocaleDateString("en-IN",{weekday:"long",month:"long",day:"numeric"}):"Your workspace"}</div><h1>{section==="overview"?"Good evening"+(session?", "+previewName.split(" ")[0]:"")+".":title[section]}</h1><p>{subtitle[section]}</p></div><div className="heading-actions">
           {section==="applications"&&<><input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={e=>void importCsv(e.target.files?.[0])}/><button className="button" onClick={()=>fileRef.current?.click()}><FileUp size={15}/>Import CSV</button><button className="button" onClick={exportCsv}><Download size={15}/>Export</button></>}
-          {["overview","applications","board"].includes(section)&&<button className="button primary" onClick={()=>{setEditApp(null);setAppModal(true);}}><Plus size={16}/>Add application</button>}
+          {["overview","applications","board"].includes(section)&&<button className="button primary" onClick={()=>{setEditApp(null);setAppModal(true);}}><Plus size={16}/>Add opportunity</button>}
           {section==="contacts"&&<button className="button primary" onClick={()=>{setEditContact(null);setContactModal(true);}}><Plus size={16}/>Add person</button>}
           {section==="referrals"&&<button className="button primary" onClick={()=>{setEditReferral(null);setReferralModal(true);}}><Plus size={16}/>Track referral</button>}
         </div></div>
@@ -383,7 +383,7 @@ export default function HomePage() {
             <Kpi label="Opportunities" value={apps.length} detail="Across all stages" icon={<BriefcaseBusiness size={16}/>} note="Every opportunity, organized"/>
             <Kpi label="Referrals made" value={refs} detail="In progress" icon={<Handshake size={16}/>} note="Keep relationships warm"/>
             <Kpi label="Follow-ups due" value={due} detail="Today or overdue" icon={<CalendarClock size={16}/>} note={due?"A good time to take action":"You’re caught up for now"}/>
-            <Kpi label="Interviews & offers" value={interviews+offers} detail={interviews+" interview"+(interviews===1?"":"s")+" · "+offers+" offer"+(offers===1?"":"s")} icon={<Sparkles size={16}/>} note="Progress worth celebrating"/>
+            <Kpi label="Interviews & hires" value={interviews+offers} detail={interviews+" interview"+(interviews===1?"":"s")+" · "+offers+" hire"+(offers===1?"":"s")} icon={<Sparkles size={16}/>} note="Progress worth celebrating"/>
           </div>
 
           <section className="panel agent-panel" aria-labelledby="career-agent-title">

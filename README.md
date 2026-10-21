@@ -1,16 +1,16 @@
 # ReferralFlow
 
-A lightweight career CRM for job applications, referral contacts, outreach templates, and follow-ups. The core workflow does not require paid APIs or automated messaging.
+A lightweight referral operations tracker for people who refer candidates to roles. Keep a record of each person, the opportunity they were referred for, progress, outcomes, follow-ups, and activity. Core tracking does not require paid APIs or automated messaging.
 
 ## Current milestone
 
 - Next.js App Router, TypeScript, Tailwind CSS, and Supabase clients
-- Dashboard, application pipeline, contact directory, follow-up queue, referral-request pipeline, and editable templates
-- Per-user Supabase persistence for applications, contacts, referral requests, and templates; new accounts receive their own default outreach templates
+- Dashboard, role/opportunity pipeline, people directory, referrals-made pipeline, follow-up queue, and editable templates
+- Per-user Supabase persistence for opportunities, people, referrals made, and templates; referral statuses cover draft, referred, in review, interview, hired, and rejected
 - CSV import/export, light/dark mode, and mobile-responsive layouts
 - ReferralFlow Copilot: workspace progress summary, prioritized next-step recommendations, and a question-and-answer panel
 - Authenticated server-side Gemini integration is optional; built-in rules-based guidance works without an external AI API
-- Application, contact, and referral changes appear in the private activity timeline
+- Opportunity, person, referral-progress, and template changes appear in the private activity timeline
 - PostgreSQL schema with row-level security (RLS) for per-user data isolation
 
 See IMPLEMENTATION_PLAN.md for the milestone roadmap. The sample records are illustrative and are not actual user data.
@@ -28,7 +28,7 @@ Requirements: Node.js 20.9 or newer and npm.
 7. Add `http://localhost:3000` and your production URL to Supabase Auth allowed redirect URLs.
 8. Run `npm run dev` and open `http://localhost:3000`.
 
-Without Supabase credentials, the UI opens in preview mode using sample records. Preview changes are only in memory and are not saved across refreshes. With keys configured, users sign in using a one-time email link and records are persisted in Postgres under RLS.
+Without Supabase credentials, the UI opens in preview mode using sample records. Preview changes are only in memory and are not saved across refreshes. With keys configured, users sign in using a one-time email link and records are persisted in Postgres under RLS. Re-running `supabase/schema.sql` updates the earlier referral-status values to the people-referred workflow.
 
 ## Deploy on Vercel
 
@@ -36,7 +36,7 @@ Import the GitHub repository, configure the two public Supabase environment vari
 
 ## CSV format
 
-Required headers: company, role. Optional headers: stage, job_url, location, priority, applied_at, next_action, next_action_date, notes. Stage values: saved, referral_requested, applied, interview, offer, rejected. CSV import is limited to 2 MB and skips incomplete or duplicate company/role rows.
+Required headers: company, role. Optional headers: stage, job_url, location, priority, applied_at, next_action, next_action_date, notes. Stage values: saved, referral_requested, applied, interview, offer, rejected. CSV import is limited to 2 MB and skips incomplete or duplicate company/role rows. Imported rows represent opportunities/roles; track each person referred to a role separately in **Referrals made**.
 
 ## Security notes
 

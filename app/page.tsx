@@ -168,7 +168,7 @@ export default function HomePage() {
     if(items.length<3&&templates.length>0)items.push({id:"template",title:"Prepare your next outreach",detail:"Personalize a saved message before contacting someone. ReferralFlow never sends messages automatically.",actionLabel:"Open templates",kind:"templates"});
     if(items.length<3&&apps.length>0)items.push({id:"pipeline",title:"Review the pipeline",detail:"A quick stage review helps keep your search accurate and your next decision clear.",actionLabel:"Open board",kind:"board"});
     return items.slice(0,3);
-  },[apps,contacts,referralRequests,templates,due]);
+  },[apps,contacts,referralRequests,templates,due,agentRefreshedAt]);
 
   async function saveApp(e:FormEvent<HTMLFormElement>){
     e.preventDefault();const form=new FormData(e.currentTarget);
@@ -389,7 +389,7 @@ export default function HomePage() {
           <section className="panel agent-panel" aria-labelledby="career-agent-title">
             <div className="agent-heading">
               <div className="agent-brand"><span className="agent-symbol"><Sparkles size={18}/></span><div><div className="agent-eyebrow">AGENTIC AI · CAREER COPILOT</div><h2 id="career-agent-title">Your progress, understood.</h2><p>I review your pipeline and turn it into practical next steps.</p></div></div>
-              <button className="button small" onClick={()=>{setAgentRefreshedAt(new Date());setAgentAnswer(localAgentAnswer("What should I do next based on my current referral pipeline?"));setAgentMode("rules");}}><Activity size={14}/>Reassess</button>
+              <button className="button small" onClick={()=>setAgentRefreshedAt(new Date())}><Activity size={14}/>Reassess</button>
             </div>
             <div className="agent-insights">
               <div className="agent-insight"><span>What you’ve done</span><strong>{apps.length} <small>opportunities</small></strong><p>{contacts.length} contacts · {referralRequests.length} tracked referrals</p></div>

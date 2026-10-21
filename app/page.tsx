@@ -58,6 +58,7 @@ function parseCsv(text: string): Record<string, string>[] {
   }
   row.push(cell.trim()); if(row.some(x=>x))all.push(row);
   if(all.length<2)return [];
+  if(quoted)throw new Error("CSV contains an unterminated quoted field.");
   const headers=all[0].map(x=>x.toLowerCase().replace(/[\s-]+/g,"_"));
   return all.slice(1).map(values=>Object.fromEntries(headers.map((key,i)=>[key,values[i]??""])));
 }

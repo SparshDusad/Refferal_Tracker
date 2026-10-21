@@ -22,12 +22,12 @@ function fallbackAnswer(question: string, workspace: Workspace) {
   const actions: string[] = [];
   if (overdue > 0) actions.push("1. Follow-up queue: review " + overdue + " item(s) due today or overdue, starting with the oldest and most important relationship.");
   if (missing.length) actions.push((actions.length + 1) + ". Add a dated next action for " + missing.slice(0, 3).map((item) => item.company + " — " + item.role).join(", ") + ".");
-  if (waiting.length) actions.push((actions.length + 1) + ". Check " + waiting.length + " referral request(s) still awaiting a clear outcome; update the status and record the response.");
+  if (waiting.length) actions.push((actions.length + 1) + ". Check " + waiting.length + " referral(s) still awaiting a clear outcome; update the status and record the response.");
   if (saved.length) actions.push((actions.length + 1) + ". Decide whether to apply to or archive " + saved.slice(0, 3).map((item) => item.company + " — " + item.role).join(", ") + ".");
   if (!actions.length) actions.push("Your current data has no obvious urgent item. Confirm each active referral has a status, next action, and due date; then review recent outcomes for patterns.");
   return "Built-in workspace review for: " + question + "\n\nWhat the data says: " +
     (summary.applications ?? apps.length) + " opportunities, " + (summary.contacts ?? 0) + " contacts, " +
-    (summary.referralRequests ?? (workspace.referrals ?? []).length) + " referral requests, " +
+    (summary.referralRequests ?? (workspace.referrals ?? []).length) + " referrals, " +
     (summary.interviews ?? 0) + " interviews, " + (summary.offers ?? 0) + " offers.\n\nRecommended next steps:\n" +
     actions.join("\n") + "\n\nThis response is generated from simple rules, not a generative model. Add GEMINI_API_KEY on the server to enable optional Gemini responses.";
 }

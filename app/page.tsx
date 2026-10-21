@@ -113,9 +113,14 @@ export default function HomePage() {
     return ()=>listener.subscription.unsubscribe();
   },[]);
   // Never carry one account's private records across sign-in, sign-out, or account switching.
+  const previousUserId=useRef<string|null|undefined>("__initial__");
   useEffect(()=>{
-    setApps([]);setContacts([]);setReferralRequests([]);setActivity([]);setTemplates([]);
-    setAgentAnswer("");setAgentQuestion("");setAgentMode(null);setAgentRefreshedAt(null);
+    const nextUserId=session?.user.id;
+    if(previousUserId.current!=="__initial__"&&previousUserId.current!==nextUserId){
+      setApps([]);setContacts([]);setReferralRequests([]);setActivity([]);setTemplates([]);
+      setAgentAnswer("");setAgentQuestion("");setAgentMode(null);setAgentRefreshedAt(null);
+    }
+    previousUserId.current=nextUserId;
   },[session?.user.id]);
   const themePersistenceReady=useRef(false);
   useEffect(()=>{

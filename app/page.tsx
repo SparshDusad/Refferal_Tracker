@@ -60,6 +60,7 @@ function parseCsv(text: string): Record<string, string>[] {
   if(all.length<2)return [];
   if(quoted)throw new Error("CSV contains an unterminated quoted field.");
   const headers=all[0].map(x=>x.toLowerCase().replace(/[\s-]+/g,"_"));
+  if(new Set(headers).size!==headers.length)throw new Error("CSV contains duplicate column headers.");
   return all.slice(1).map(values=>Object.fromEntries(headers.map((key,i)=>[key,values[i]??""])));
 }
 const csvEscape = (v:unknown) => '"' + String(v??"").replace(/"/g,'""') + '"';

@@ -4,13 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import {
   Activity, ArrowRight, BriefcaseBusiness, CalendarClock, Check, CheckCircle2, ChevronRight,
   Clipboard, Download, ExternalLink, FileUp, Filter, Handshake, LayoutDashboard, LayoutGrid, LogIn,
-  LogOut, Mail, Menu, Moon, Pencil, Plus, Search, ShieldCheck, Sparkles, Sun, Trash2, Users, X,
+  LogOut, Mail, Menu, Moon, Pencil, Plus, Search, ShieldCheck, Sparkles, Sun, Trash2, Users, UserRound, X,
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { APPLICATION_STAGES, STAGE_COLORS, STAGE_LABELS, type ApplicationRecord, type ApplicationStage, type ContactRecord, type OutreachTemplate, type Priority, type ReferralRequestRecord, type ReferralRequestStatus, type ActivityEventRecord } from "@/lib/types";
 
-type Section = "overview" | "applications" | "board" | "contacts" | "referrals" | "follow-ups" | "templates";
+type Section = "overview" | "applications" | "board" | "contacts" | "referrals" | "follow-ups" | "templates" | "about";
 type ToastState = { message: string; error?: boolean } | null;
 const localDateKey = (date: Date) => {
   const year=date.getFullYear();const month=String(date.getMonth()+1).padStart(2,"0");const day=String(date.getDate()).padStart(2,"0");
@@ -396,9 +396,10 @@ export default function HomePage() {
     {id:"referrals" as const,label:"Referrals made",icon:Handshake,count:referralRequests.length},
     {id:"follow-ups" as const,label:"Follow-ups",icon:CalendarClock,count:due},
     {id:"templates" as const,label:"Message templates",icon:Mail},
+    {id:"about" as const,label:"About the creator",icon:UserRound},
   ];
-  const title:Record<Section,string>={overview:"Your referral activity, in motion.",applications:"Opportunities",board:"Pipeline board",contacts:"People directory",referrals:"People you referred","follow-ups":"Follow-up queue",templates:"Outreach library"};
-  const subtitle:Record<Section,string>={overview:"A clear view of every opportunity and the next step to take.",applications:"Keep every role you refer people to, with its status and next action.",board:"Review the opportunities connected to the people you refer.",contacts:"Keep each person’s details and referral context together.",referrals:"Track each person you refer, their progress, and the outcome.","follow-ups":"Small, timely actions can keep good opportunities moving.",templates:"Reusable, editable messages that still sound like you."};
+  const title:Record<Section,string>={overview:"Your referral activity, in motion.",applications:"Opportunities",board:"Pipeline board",contacts:"People directory",referrals:"People you referred","follow-ups":"Follow-up queue",templates:"Outreach library",about:"Meet the creator"};
+  const subtitle:Record<Section,string>={overview:"A clear view of every opportunity and the next step to take.",applications:"Keep every role you refer people to, with its status and next action.",board:"Review the opportunities connected to the people you refer.",contacts:"Keep each person’s details and referral context together.",referrals:"Track each person you refer, their progress, and the outcome.","follow-ups":"Small, timely actions can keep good opportunities moving.",templates:"Reusable, editable messages that still sound like you.",about:"The person behind ReferralFlow, the work I do, and how to connect."};
   const previewName=session?.user.email?.split("@")[0]?.replace(/[._-]+/g," ")??"Your workspace";
   const changeSection=(s:Section)=>{setSection(s);setMobileOpen(false);setStageFilter("all");};
 

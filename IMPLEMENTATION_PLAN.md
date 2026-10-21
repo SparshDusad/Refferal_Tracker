@@ -1,6 +1,6 @@
 # ReferralFlow — implementation plan
 
-This repository is being developed directly on `main` at the owner's request. Work is shipped in small, verifiable milestones.
+This repository is being developed directly on `main` at the owner's request. Work is shipped in small, verifiable milestones. The primary user is a referrer tracking the people they refer to roles—not a candidate asking someone else for a referral.
 
 ## Milestone 1 — App foundation and usable dashboard
 - Next.js App Router, TypeScript and Tailwind CSS
@@ -16,7 +16,7 @@ This repository is being developed directly on `main` at the owner's request. Wo
 - PostgreSQL schema for profiles, applications, contacts, referral requests, follow-ups, templates, and activity
 - Row Level Security on every user-owned table
 - Load and mutate only records owned by the authenticated user
-- Persist referral requests with statuses from draft through referred/declined/closed
+- Persist referrals made with statuses from draft/ready-to-submit through referred, in review, interview, hired, or rejected
 - Seed editable default outreach templates per new account
 - Replace demo data with real data when a project is configured
 

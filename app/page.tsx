@@ -143,6 +143,8 @@ export default function HomePage() {
   },[]);
   useEffect(()=>{
     const saved=window.localStorage.getItem("referralflow-theme");
+    // Restore browser-only preference after hydration to avoid server/client markup mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if(saved==="light"||saved==="dark")setTheme(saved);
   },[]);
   useEffect(()=>{document.documentElement.dataset.theme=theme;if(themePersistenceReady.current)window.localStorage.setItem("referralflow-theme",theme);else themePersistenceReady.current=true;},[theme]);

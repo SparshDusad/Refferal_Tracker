@@ -176,12 +176,11 @@ export default function HomePage() {
     if(cloudReady){
       const sb=createClient();const result=editApp?await sb.from("applications").update(record).eq("id",editApp.id).select().single():await sb.from("applications").insert({...record,user_id:session!.user.id}).select().single();
       setBusy(false);if(result.error){notify("Could not save: "+result.error.message,true);return;}
-      const saved=result.data as ApplicationRecord;setApps(current=>editApp?current.map(a=>a.id===saved.id?saved:a):[saved,...current]);
+      const saved=result.data as ApplicationRecord;setApps(current=>editApp?current.map(a=>a.id===saved.id?saved:a):[saved,...current]);void recordActivity("application",saved.id,editApp?"updated":"created",(editApp?"Updated":"Added")+" opportunity: "+company+" — "+role+".");
     }else{
       const now=new Date().toISOString();const local:ApplicationRecord={...record,id:editApp?.id??crypto.randomUUID(),user_id:"",created_at:editApp?.created_at??now};
       setApps(current=>editApp?current.map(a=>a.id===local.id?local:a):[local,...current]);setBusy(false);
     }
-    if(cloudReady){const targetCompany=company;void recordActivity("application",editApp?.id??null,editApp?"updated":"created",(editApp?"Updated":"Added")+" opportunity: "+targetCompany+" — "+role+".");}
     setAppModal(false);setEditApp(null);notify(editApp?"Application updated.":"Application added.");
   }
   async function deleteApp(a:ApplicationRecord){
@@ -203,9 +202,8 @@ export default function HomePage() {
     if(profile&&!/^https?:\/\/.+/i.test(profile)){notify("Profile URL must start with http:// or https://.",true);return;}
     const record={name,company,role:String(f.get("role")??"").trim()||null,email:String(f.get("email")??"").trim()||null,linkedin_url:profile||null,relationship:String(f.get("relationship")??"").trim()||null,notes:String(f.get("notes")??"").trim()||null};
     setBusy(true);
-    if(cloudReady){const sb=createClient();const result=editContact?await sb.from("contacts").update(record).eq("id",editContact.id).select().single():await sb.from("contacts").insert({...record,user_id:session!.user.id}).select().single();setBusy(false);if(result.error){notify("Could not save contact: "+result.error.message,true);return;}const saved=result.data as ContactRecord;setContacts(cur=>editContact?cur.map(c=>c.id===saved.id?saved:c):[saved,...cur]);}
+    if(cloudReady){const sb=createClient();const result=editContact?await sb.from("contacts").update(record).eq("id",editContact.id).select().single():await sb.from("contacts").insert({...record,user_id:session!.user.id}).select().single();setBusy(false);if(result.error){notify("Could not save contact: "+result.error.message,true);return;}const saved=result.data as ContactRecord;setContacts(cur=>editContact?cur.map(c=>c.id===saved.id?saved:c):[saved,...cur]);void recordActivity("contact",saved.id,editContact?"updated":"created",(editContact?"Updated":"Added")+" contact: "+name+" at "+company+".");}
     else{const local:ContactRecord={...record,id:editContact?.id??crypto.randomUUID(),user_id:"",created_at:editContact?.created_at??new Date().toISOString()};setContacts(cur=>editContact?cur.map(c=>c.id===local.id?local:c):[local,...cur]);setBusy(false);}
-    void recordActivity("contact",editContact?.id??null,editContact?"updated":"created",(editContact?"Updated":"Added")+" contact: "+name+" at "+company+".");
     setContactModal(false);setEditContact(null);notify(editContact?"Contact updated.":"Contact added.");
   }
   async function deleteContact(c:ContactRecord){
@@ -259,6 +257,7 @@ export default function HomePage() {
   async function saveTemplate(t:OutreachTemplate){
     if(cloudReady){const {data,error}=await createClient().from("outreach_templates").upsert({...t,user_id:session!.user.id,updated_at:new Date().toISOString()},{onConflict:"user_id,key"}).select().single();if(error){notify("Could not save template: "+error.message,true);return;}setTemplates(cur=>cur.map(x=>x.key===t.key?data as OutreachTemplate:x));}
     else setTemplates(cur=>cur.map(x=>x.key===t.key?t:x));
+    void recordActivity("template",t.id??null,"updated","Updated outreach template: "+t.title+".");
     notify("Template saved.");
   }
   function localAgentAnswer(question:string){
@@ -330,7 +329,7 @@ export default function HomePage() {
       if(!clean.length){notify("Nothing imported. "+duplicates+" duplicate(s), "+skipped+" incomplete row(s).",true);return;}
       if(cloudReady){const {data,error}=await createClient().from("applications").insert(clean).select();if(error)throw new Error(error.message);setApps(cur=>[...(data as ApplicationRecord[]),...cur]);}
       else{const now=new Date().toISOString();setApps(cur=>[...(clean.map(r=>({...r,id:crypto.randomUUID(),created_at:now,updated_at:now}) as ApplicationRecord)),...cur]);}
-      notify("Imported "+clean.length+" row(s); skipped "+duplicates+" duplicate(s) and "+skipped+" incomplete row(s).");
+      void recordActivity("application",null,"imported","Imported "+clean.length+" application(s) from CSV.");notify("Imported "+clean.length+" row(s); skipped "+duplicates+" duplicate(s) and "+skipped+" incomplete row(s).");
     }catch(e){notify(e instanceof Error?e.message:"CSV import failed.",true);}
     finally{if(fileRef.current)fileRef.current.value="";}
   }
@@ -382,7 +381,7 @@ export default function HomePage() {
           <section className="panel agent-panel" aria-labelledby="career-agent-title">
             <div className="agent-heading">
               <div className="agent-brand"><span className="agent-symbol"><Sparkles size={18}/></span><div><div className="agent-eyebrow">AGENTIC AI · CAREER COPILOT</div><h2 id="career-agent-title">Your progress, understood.</h2><p>I review your pipeline and turn it into practical next steps.</p></div></div>
-              <button className="button small" onClick={()=>setAgentRefreshedAt(new Date())}><Activity size={14}/>Reassess</button>
+              <button className="button small" onClick={()=>{setAgentRefreshedAt(new Date());setAgentAnswer(localAgentAnswer("What should I do next based on my current referral pipeline?"));setAgentMode("rules");}}><Activity size={14}/>Reassess</button>
             </div>
             <div className="agent-insights">
               <div className="agent-insight"><span>What you’ve done</span><strong>{apps.length} <small>opportunities</small></strong><p>{contacts.length} contacts · {referralRequests.length} tracked referral requests</p></div>

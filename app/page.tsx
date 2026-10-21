@@ -56,7 +56,7 @@ function parseCsv(text: string): Record<string, string>[] {
   const headers=all[0].map(x=>x.toLowerCase().replace(/[\s-]+/g,"_"));
   return all.slice(1).map(values=>Object.fromEntries(headers.map((key,i)=>[key,values[i]??""])));
 }
-const csvEscape = (v:unknown) => '"' + String(v??"").replace(/"/g,'""') + "'";
+const csvEscape = (v:unknown) => '"' + String(v??"").replace(/"/g,'""') + '"';
 const toStage = (v:string):ApplicationStage => APPLICATION_STAGES.includes(v as ApplicationStage) ? v as ApplicationStage : "saved";
 
 export default function HomePage() {

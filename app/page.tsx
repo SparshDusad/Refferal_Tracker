@@ -81,6 +81,7 @@ export default function HomePage() {
   const [authModal,setAuthModal]=useState(false);
   const [email,setEmail]=useState("");
   const [busy,setBusy]=useState(false);
+  const [agentRefreshedAt,setAgentRefreshedAt]=useState<Date|null>(null);
   const [toast,setToast]=useState<ToastState>(null);
   const [mobileOpen,setMobileOpen]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
@@ -144,6 +145,20 @@ export default function HomePage() {
   const refs=apps.filter(a=>a.stage==="referral_requested").length;
   const interviews=apps.filter(a=>a.stage==="interview").length;
   const offers=apps.filter(a=>a.stage==="offer").length;
+  const agentRecommendations=useMemo(()=>{
+    const items:{id:string;title:string;detail:string;actionLabel:string;kind:"follow-ups"|"application"|"contact"|"referral"|"templates"|"board";app?:ApplicationRecord}[]=[];
+    if(due>0)items.push({id:"due",title:"Clear your follow-up queue",detail:due+" item"+(due===1?" is":"s are")+" due today or overdue. A short, thoughtful follow-up can keep a conversation moving.",actionLabel:"Review follow-ups",kind:"follow-ups"});
+    const needsNextStep=apps.find(a=>!["offer","rejected"].includes(a.stage)&&!a.next_action);
+    if(needsNextStep)items.push({id:"next-step",title:"Give an opportunity a next step",detail:needsNextStep.company+" · "+needsNextStep.role+" has no next action recorded. Add a concrete action and date so it doesn't go quiet.",actionLabel:"Update opportunity",kind:"application",app:needsNextStep});
+    const saved=apps.find(a=>a.stage==="saved");
+    if(saved)items.push({id:"saved",title:"Move a saved role forward",detail:"You have a saved opportunity at "+saved.company+". Check the job description and decide whether to apply or close it out.",actionLabel:"Review pipeline",kind:"board",app:saved});
+    if(apps.length>0&&contacts.length===0)items.push({id:"network",title:"Build your referral network",detail:"Add a relevant recruiter, alumni contact, or team member to make your outreach more intentional.",actionLabel:"Add a contact",kind:"contact"});
+    if(apps.length>0&&contacts.length>0&&referralRequests.length===0)items.push({id:"referral",title:"Turn a connection into a plan",detail:"Pair an opportunity with a contact and track the request from draft through to outcome.",actionLabel:"Track a referral",kind:"referral"});
+    if(!apps.length)items.push({id:"start",title:"Give your agent something to work with",detail:"Add your first target role. The agent can then spot next steps, overdue actions, and referral opportunities from your own workspace.",actionLabel:"Add an application",kind:"application"});
+    if(items.length<3&&templates.length>0)items.push({id:"template",title:"Prepare your next outreach",detail:"Personalize a saved message before contacting someone. ReferralFlow never sends messages automatically.",actionLabel:"Open templates",kind:"templates"});
+    if(items.length<3&&apps.length>0)items.push({id:"pipeline",title:"Review the pipeline",detail:"A quick stage review helps keep your search accurate and your next decision clear.",actionLabel:"Open board",kind:"board"});
+    return items.slice(0,3);
+  },[apps,contacts,referralRequests,templates,due]);
 
   async function saveApp(e:FormEvent<HTMLFormElement>){
     e.preventDefault();const form=new FormData(e.currentTarget);
@@ -316,6 +331,21 @@ export default function HomePage() {
             <Kpi label="Follow-ups due" value={due} detail="Today or overdue" icon={<CalendarClock size={16}/>} note={due?"A good time to take action":"You’re caught up for now"}/>
             <Kpi label="Interviews & offers" value={interviews+offers} detail={interviews+" interview"+(interviews===1?"":"s")+" · "+offers+" offer"+(offers===1?"":"s")} icon={<Sparkles size={16}/>} note="Progress worth celebrating"/>
           </div>
+
+          <section className="panel agent-panel" aria-labelledby="career-agent-title">
+            <div className="agent-heading">
+              <div className="agent-brand"><span className="agent-symbol"><Sparkles size={18}/></span><div><div className="agent-eyebrow">AGENTIC AI · CAREER COPILOT</div><h2 id="career-agent-title">Your progress, understood.</h2><p>I review your pipeline and turn it into practical next steps.</p></div></div>
+              <button className="button small" onClick={()=>setAgentRefreshedAt(new Date())}><Activity size={14}/>Reassess</button>
+            </div>
+            <div className="agent-insights">
+              <div className="agent-insight"><span>What you’ve done</span><strong>{apps.length} <small>opportunities</small></strong><p>{contacts.length} contacts · {referralRequests.length} tracked referral requests</p></div>
+              <div className="agent-insight"><span>Momentum so far</span><strong>{interviews+offers} <small>interviews / offers</small></strong><p>{activity.length} recent workspace events recorded</p></div>
+              <div className="agent-insight"><span>Needs attention</span><strong>{due} <small>due follow-ups</small></strong><p>{due===0?"No dated follow-ups are overdue today.":"Start with the most time-sensitive follow-up."}</p></div>
+            </div>
+            <div className="agent-plan-head"><div><h3>What you can do next</h3><p>Prioritized from the information currently in your workspace.</p></div><span className="agent-private"><ShieldCheck size={12}/>Private · no paid API</span></div>
+            {agentRecommendations.length?<div className="agent-recommendations">{agentRecommendations.map((item,index)=><div className="agent-recommendation" key={item.id}><span className="agent-step">{index+1}</span><div className="agent-recommendation-copy"><strong>{item.title}</strong><p>{item.detail}</p></div><button className="text-button agent-action" onClick={()=>{if(item.kind==="follow-ups")changeSection("follow-ups");else if(item.kind==="application"){setEditApp(item.app??null);setAppModal(true);}else if(item.kind==="contact"){setEditContact(null);setContactModal(true);}else if(item.kind==="referral"){setEditReferral(null);setReferralModal(true);}else changeSection(item.kind);}}>{item.actionLabel}<ArrowRight size={14}/></button></div>)}</div>:<Empty title="Your pipeline looks tidy" text="Keep your applications and next-action dates current. The agent will flag the next useful step as your workspace changes."/>}
+            <div className="agent-footnote">{agentRefreshedAt?"Plan reassessed at "+agentRefreshedAt.toLocaleTimeString("en-IN",{hour:"numeric",minute:"2-digit"})+". ":""}Recommendations are generated from your saved workspace data; no messages are sent and no external AI service is called.</div>
+          </section>
           <div className="dashboard-grid">
             <section className="panel"><PanelHeader title="Recent applications" subtitle="The latest roles in your pipeline" action="View all" onAction={()=>changeSection("applications")}/><AppTable rows={filtered.slice(0,5)} onEdit={a=>{setEditApp(a);setAppModal(true);}} onDelete={deleteApp} onMove={moveApp}/>{!filtered.length&&<Empty title="No matching applications" text="Try another search or add an opportunity." action="Add application" onAction={()=>{setEditApp(null);setAppModal(true);}}/>}</section>
             <section className="panel"><PanelHeader title="Next actions" subtitle="A little momentum goes a long way" action="All actions" onAction={()=>changeSection("follow-ups")}/><div className="action-list">{followUps.slice(0,5).map(a=>{const d=dueIn(a.next_action_date);return <div className="action-row" key={a.id}><div className="action-icon"><CalendarClock size={15}/></div><div className="action-copy"><strong>{a.next_action}</strong><span>{a.role} · {a.company}</span><small>{dateLabel(a.next_action_date)} {d!==null&&d<=0&&<em className={d<0?"overdue":""}>{d<0?Math.abs(d)+"d overdue":"Due today"}</em>}</small></div><button className="plain-icon" aria-label="Edit follow-up" onClick={()=>{setEditApp(a);setAppModal(true);}}><ChevronRight size={15}/></button></div>;})}{!followUps.length&&<Empty title="All clear for now" text="Add a next action and date to an application."/>}</div></section>
@@ -340,7 +370,7 @@ export default function HomePage() {
         {section==="follow-ups"&&<section className="panel"><PanelHeader title="Your follow-up list" subtitle="Dates are based on the next action set on each application." side={<span className="status amber">{due} due now</span>}/><div className="table-wrap"><table className="data-table"><thead><tr><th>Next action</th><th>Company / role</th><th>Due date</th><th>Stage</th><th>Priority</th><th/></tr></thead><tbody>{followUps.filter(a=>!search||(a.company+" "+a.role+" "+a.next_action).toLowerCase().includes(search.toLowerCase())).map(a=>{const d=dueIn(a.next_action_date);return <tr key={a.id}><td><strong>{a.next_action}</strong></td><td><strong>{a.company}</strong><small>{a.role}</small></td><td><span className={"due-label "+(d!==null&&d<0?"overdue":"")}>{d!==null&&d<0?Math.abs(d)+" days overdue":d===0?"Today":dateLabel(a.next_action_date)}</span></td><td><span className={"status "+STAGE_COLORS[a.stage]}>{STAGE_LABELS[a.stage]}</span></td><td><span className={"priority "+a.priority}>● {a.priority}</span></td><td><button className="plain-icon" aria-label="Edit follow-up" onClick={()=>{setEditApp(a);setAppModal(true);}}><Pencil size={14}/></button></td></tr>;})}</tbody></table></div>{!followUps.length&&<Empty title="Nothing on the calendar yet" text="Add a next action and date to an application to keep this queue updated." action="Add application" onAction={()=>setAppModal(true)}/>}</section>}
 
         {section==="templates"&&<><div className="preview-notice"><Sparkles size={15}/><div><strong>Make it personal.</strong> Replace placeholders like <code>{"{name}"}</code> and <code>{"{company}"}</code> before sending. ReferralFlow never sends messages automatically.</div></div><div className="template-grid">{templates.map(t=><TemplateCard key={t.key+":"+(t.updated_at??"preview")} template={t} onSave={saveTemplate} onCopy={async text=>{try{await navigator.clipboard.writeText(text);notify("Message copied to clipboard.");}catch{notify("Clipboard permission was blocked.",true);}}}/>)}</div></>}
-        <footer className="app-footer">Built for thoughtful job searching · Your data stays private to your account when cloud sync is configured.</footer>
+        <footer className="app-footer"><div><span>Built for thoughtful job searching · Your data stays private to your account when cloud sync is configured.</span><span className="creator-signature">Designed & built by <strong>Sparsh Dusad</strong></span></div><a href="https://github.com/SparshDusad/Refferal_Tracker" target="_blank" rel="noreferrer" aria-label="View ReferralFlow source on GitHub"><span>Open-source project</span><ExternalLink size={13}/></a></footer>
       </div>
     </main>
     {appModal&&<AppModal key={editApp?.id??"new"} app={editApp} busy={busy} onClose={()=>{setAppModal(false);setEditApp(null);}} onSubmit={saveApp}/>}

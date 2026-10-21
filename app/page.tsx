@@ -253,6 +253,7 @@ export default function HomePage() {
     const status=String(f.get("status")??"draft") as ReferralRequestStatus;
     if(!apps.some(a=>a.id===application_id)||!contacts.some(c=>c.id===contact_id)){notify("Choose a valid opportunity and person.",true);return;}
     const previous=editReferral;
+    if(!previous&&referralRequests.some(r=>r.application_id===application_id&&r.contact_id===contact_id)){notify("This person is already tracked for this opportunity. Edit the existing referral record instead.",true);return;}
     const referredStatuses:ReferralRequestStatus[]=["referred","in_review","interview","hired","rejected","closed"];
     const requested_at=referredStatuses.includes(status)?(previous?.requested_at??new Date().toISOString()):null;
     const responded_at=["in_review","interview","hired","rejected","closed"].includes(status)?(previous?.responded_at??new Date().toISOString()):null;

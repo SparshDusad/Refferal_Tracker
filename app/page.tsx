@@ -96,6 +96,7 @@ export default function HomePage() {
   const [toast,setToast]=useState<ToastState>(null);
   const [mobileOpen,setMobileOpen]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
+  const searchInputRef=useRef<HTMLInputElement>(null);
   const cloudReady=isSupabaseConfigured && Boolean(session?.user);
 
   const notify=useCallback((message:string,error=false)=>{setToast({message,error});window.setTimeout(()=>setToast(null),3200);},[]);
@@ -123,6 +124,10 @@ export default function HomePage() {
     previousUserId.current=nextUserId;
   },[session?.user.id]);
   const themePersistenceReady=useRef(false);
+  useEffect(()=>{
+    const onShortcut=(event:KeyboardEvent)=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==="k"){event.preventDefault();searchInputRef.current?.focus();}};
+    window.addEventListener("keydown",onShortcut);return ()=>window.removeEventListener("keydown",onShortcut);
+  },[]);
   useEffect(()=>{
     const saved=window.localStorage.getItem("referralflow-theme");
     if(saved==="light"||saved==="dark")setTheme(saved);
@@ -393,7 +398,7 @@ export default function HomePage() {
       <div className="account-row"><div className="avatar">{initials(session?.user.email??"Demo")}</div><div className="account-copy"><strong>{session?previewName:"Demo workspace"}</strong><span>{session?.user.email??(isSupabaseConfigured?"Sign in to sync":"Preview · Not synced")}</span></div><button className="icon-button tiny-icon" aria-label={session?"Sign out":"Sign in"} title={session?"Sign out":"Sign in"} onClick={()=>session?void signOut():setAuthModal(true)}>{session?<LogOut size={15}/>:<LogIn size={15}/>}</button></div>
     </aside>
     <main className="main-shell">
-      <header className="topbar"><div className="crumb"><button className="icon-button mobile-menu" onClick={()=>setMobileOpen(true)} aria-label="Open navigation"><Menu size={17}/></button><span>Workspace</span><ChevronRight size={13}/><strong>{nav.find(n=>n.id===section)?.label}</strong></div><div className="top-actions"><label className="search-box"><Search size={15}/><input aria-label="Search this workspace" placeholder="Search companies, roles…" value={search} onChange={e=>setSearch(e.target.value)}/><span className="shortcut">⌘ K</span></label><button className="icon-button" title={theme==="light"?"Switch to dark mode":"Switch to light mode"} aria-label={theme==="light"?"Switch to dark mode":"Switch to light mode"} onClick={()=>setTheme(t=>t==="light"?"dark":"light")}>{theme==="light"?<Moon size={16}/>:<Sun size={16}/>}</button><button className="icon-button" title={session?"Account connected":"Sign in to sync"} aria-label="Account" onClick={()=>session?notify("Signed in as "+session.user.email):setAuthModal(true)}>{session?<ShieldCheck size={16} color="var(--green)"/>:<Users size={16}/>}</button></div></header>
+      <header className="topbar"><div className="crumb"><button className="icon-button mobile-menu" onClick={()=>setMobileOpen(true)} aria-label="Open navigation"><Menu size={17}/></button><span>Workspace</span><ChevronRight size={13}/><strong>{nav.find(n=>n.id===section)?.label}</strong></div><div className="top-actions"><label className="search-box"><Search size={15}/><input ref={searchInputRef} aria-label="Search this workspace" placeholder="Search companies, roles…" value={search} onChange={e=>setSearch(e.target.value)}/><span className="shortcut">Ctrl/⌘ K</span></label><button className="icon-button" title={theme==="light"?"Switch to dark mode":"Switch to light mode"} aria-label={theme==="light"?"Switch to dark mode":"Switch to light mode"} onClick={()=>setTheme(t=>t==="light"?"dark":"light")}>{theme==="light"?<Moon size={16}/>:<Sun size={16}/>}</button><button className="icon-button" title={session?"Account connected":"Sign in to sync"} aria-label="Account" onClick={()=>session?notify("Signed in as "+session.user.email):setAuthModal(true)}>{session?<ShieldCheck size={16} color="var(--green)"/>:<Users size={16}/>}</button></div></header>
       <div className="page-content">
         {!cloudReady&&<div className="preview-notice"><Activity size={15}/><div><strong>{isSupabaseConfigured?"Preview mode · Sign in to sync":"Preview mode · Cloud not configured"}</strong> — {isSupabaseConfigured?"These edits are temporary until you sign in.":"Sample records are illustrative; edits are in-memory only and disappear after refresh."} {isSupabaseConfigured?<button className="text-button inline" onClick={()=>setAuthModal(true)}>Sign in <ArrowRight size={12}/></button>:<a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Set up Supabase <ExternalLink size={11}/></a>}</div></div>}
         <div className="page-heading"><div><div className="eyebrow">{section==="overview"?new Date().toLocaleDateString("en-IN",{weekday:"long",month:"long",day:"numeric"}):"Your workspace"}</div><h1>{section==="overview"?"Good evening"+(session?", "+previewName.split(" ")[0]:"")+".":title[section]}</h1><p>{subtitle[section]}</p></div><div className="heading-actions">

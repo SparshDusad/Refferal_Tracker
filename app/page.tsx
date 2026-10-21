@@ -105,6 +105,10 @@ export default function HomePage() {
     const {data:listener}=supabase.auth.onAuthStateChange((_event,next)=>{setSession(next);setAuthReady(true);});
     return ()=>listener.subscription.unsubscribe();
   },[]);
+  useEffect(()=>{
+    const saved=window.localStorage.getItem("referralflow-theme");
+    if(saved==="light"||saved==="dark")setTheme(saved);
+  },[]);
   useEffect(()=>{document.documentElement.dataset.theme=theme;window.localStorage.setItem("referralflow-theme",theme);},[theme]);
 
   const loadCloud=useCallback(async()=>{

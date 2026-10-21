@@ -262,13 +262,13 @@ export default function HomePage() {
     notify("Template saved.");
   }
   function localAgentAnswer(question:string){
-    const top=agentRecommendations.slice(0,3).map((item,index)=>(index+1)+". "+item.title+": "+item.detail).join("\\n");
-    const questionText=question.trim()?("You asked: "+question.trim()+"\\n\\n"):"";
-    return questionText+"Here is the best next-step plan from the data currently in this workspace.\\n"+
-      "Progress: "+apps.length+" opportunities, "+contacts.length+" contacts, "+referralRequests.length+" tracked referral requests, "+interviews+" interviews, and "+offers+" offers.\\n"+
-      "Follow-ups due or overdue: "+due+".\\n\\n"+
+    const top=agentRecommendations.slice(0,3).map((item,index)=>(index+1)+". "+item.title+": "+item.detail).join("\n");
+    const questionText=question.trim()?("You asked: "+question.trim()+"\n\n"):"";
+    return questionText+"Here is the best next-step plan from the data currently in this workspace.\n"+
+      "Progress: "+apps.length+" opportunities, "+contacts.length+" contacts, "+referralRequests.length+" tracked referral requests, "+interviews+" interviews, and "+offers+" offers.\n"+
+      "Follow-ups due or overdue: "+due+".\n\n"+
       (top||"No urgent recommendation is available yet. Add a next action and due date to each active referral or opportunity, then reassess.")+
-      "\\n\\nThis is the built-in rules-based mode. Configure GEMINI_API_KEY on the server for optional generative answers.";
+      "\n\nThis is the built-in rules-based mode. Configure GEMINI_API_KEY on the server for optional generative answers.";
   }
   async function askAgent(e:FormEvent<HTMLFormElement>){
     e.preventDefault();
@@ -297,7 +297,7 @@ export default function HomePage() {
       if(!response.ok)throw new Error(result.error||"The agent could not answer right now.");
       setAgentAnswer(result.answer||localAgentAnswer(question));setAgentMode(result.mode==="gemini"?"gemini":"rules");setAgentRefreshedAt(new Date());
     }catch(error){
-      setAgentAnswer(localAgentAnswer(question)+"\\n\\nLive agent request unavailable: "+(error instanceof Error?error.message:"unknown error"));
+      setAgentAnswer(localAgentAnswer(question)+"\n\nLive agent request unavailable: "+(error instanceof Error?error.message:"unknown error"));
       setAgentMode("rules");setAgentRefreshedAt(new Date());
     }finally{setAgentBusy(false);}
   }

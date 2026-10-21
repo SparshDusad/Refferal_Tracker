@@ -66,7 +66,7 @@ export default function HomePage() {
   const [contacts,setContacts]=useState<ContactRecord[]>(initialContacts);
   const [templates,setTemplates]=useState<OutreachTemplate[]>(initialTemplates);
   const [session,setSession]=useState<Session|null>(null);
-  const [authReady,setAuthReady]=useState(false);
+  const [authReady,setAuthReady]=useState(!isSupabaseConfigured);
   const [search,setSearch]=useState("");
   const [stageFilter,setStageFilter]=useState("all");
   const [appModal,setAppModal]=useState(false);
@@ -83,9 +83,7 @@ export default function HomePage() {
 
   const notify=useCallback((message:string,error=false)=>{setToast({message,error});window.setTimeout(()=>setToast(null),3200);},[]);
   useEffect(()=>{
-    const saved=window.localStorage.getItem("referralflow-theme");
-    if(saved==="light"||saved==="dark")setTheme(saved);
-    if(!isSupabaseConfigured){setAuthReady(true);return;}
+    if(!isSupabaseConfigured)return;
     const supabase=createClient();
     supabase.auth.getSession().then(({data})=>{setSession(data.session);setAuthReady(true);}).catch(()=>setAuthReady(true));
     const {data:listener}=supabase.auth.onAuthStateChange((_event,next)=>{setSession(next);setAuthReady(true);});
@@ -105,7 +103,7 @@ export default function HomePage() {
     if(c.error)notify("Could not load contacts: "+c.error.message,true);else setContacts((c.data??[]) as ContactRecord[]);
     if(t.error)notify("Could not load templates. Apply the latest schema in Supabase.",true);else if(t.data?.length)setTemplates(t.data as OutreachTemplate[]);
   },[cloudReady,notify]);
-  useEffect(()=>{void loadCloud();},[loadCloud]);
+  useEffect(()=>{if(cloudReady)void Promise.resolve().then(loadCloud);},[loadCloud,cloudReady]);
 
   const filtered=useMemo(()=>apps.filter(a=>{
     const q=search.trim().toLowerCase();
@@ -262,7 +260,7 @@ export default function HomePage() {
 
         {section==="follow-ups"&&<section className="panel"><PanelHeader title="Your follow-up list" subtitle="Dates are based on the next action set on each application." side={<span className="status amber">{due} due now</span>}/><div className="table-wrap"><table className="data-table"><thead><tr><th>Next action</th><th>Company / role</th><th>Due date</th><th>Stage</th><th>Priority</th><th/></tr></thead><tbody>{followUps.filter(a=>!search||(a.company+" "+a.role+" "+a.next_action).toLowerCase().includes(search.toLowerCase())).map(a=>{const d=dueIn(a.next_action_date);return <tr key={a.id}><td><strong>{a.next_action}</strong></td><td><strong>{a.company}</strong><small>{a.role}</small></td><td><span className={"due-label "+(d!==null&&d<0?"overdue":"")}>{d!==null&&d<0?Math.abs(d)+" days overdue":d===0?"Today":dateLabel(a.next_action_date)}</span></td><td><span className={"status "+STAGE_COLORS[a.stage]}>{STAGE_LABELS[a.stage]}</span></td><td><span className={"priority "+a.priority}>● {a.priority}</span></td><td><button className="plain-icon" aria-label="Edit follow-up" onClick={()=>{setEditApp(a);setAppModal(true);}}><Pencil size={14}/></button></td></tr>;})}</tbody></table></div>{!followUps.length&&<Empty title="Nothing on the calendar yet" text="Add a next action and date to an application to keep this queue updated." action="Add application" onAction={()=>setAppModal(true)}/>}</section>}
 
-        {section==="templates"&&<><div className="preview-notice"><Sparkles size={15}/><div><strong>Make it personal.</strong> Replace placeholders like <code>{"{name}"}</code> and <code>{"{company}"}</code> before sending. ReferralFlow never sends messages automatically.</div></div><div className="template-grid">{templates.map(t=><TemplateCard key={t.key} template={t} onSave={saveTemplate} onCopy={async text=>{try{await navigator.clipboard.writeText(text);notify("Message copied to clipboard.");}catch{notify("Clipboard permission was blocked.",true);}}}/>)}</div></>}
+        {section==="templates"&&<><div className="preview-notice"><Sparkles size={15}/><div><strong>Make it personal.</strong> Replace placeholders like <code>{"{name}"}</code> and <code>{"{company}"}</code> before sending. ReferralFlow never sends messages automatically.</div></div><div className="template-grid">{templates.map(t=><TemplateCard key={t.key+":"+(t.updated_at??"preview")} template={t} onSave={saveTemplate} onCopy={async text=>{try{await navigator.clipboard.writeText(text);notify("Message copied to clipboard.");}catch{notify("Clipboard permission was blocked.",true);}}}/>)}</div></>}
         <footer className="app-footer">Built for thoughtful job searching · Your data stays private to your account when cloud sync is configured.</footer>
       </div>
     </main>
@@ -311,7 +309,7 @@ function ContactModal({contact,busy,onClose,onSubmit}:{contact:ContactRecord|nul
   </div><div className="form-footer"><span className="form-note"><i>*</i> Required fields</span><div><button className="button" type="button" onClick={onClose}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy?"Saving…":<><Check size={14}/>{contact?"Save contact":"Add contact"}</>}</button></div></div></form></section></div>;
 }
 function TemplateCard({template,onSave,onCopy}:{template:OutreachTemplate;onSave:(t:OutreachTemplate)=>void;onCopy:(text:string)=>Promise<void>}){
-  const [draft,setDraft]=useState(template);useEffect(()=>setDraft(template),[template]);
+  const [draft,setDraft]=useState(template);
   const dirty=draft.title!==template.title||draft.subject!==template.subject||draft.body!==template.body;
   return <section className="template-card"><div className="template-head"><div><h3>{template.title}</h3><p>Edit once, personalize before sending.</p></div><span className="template-chip">{template.channel.replace("_"," ")}</span></div><label className="field"><span>Template title</span><input value={draft.title} maxLength={120} onChange={e=>setDraft(d=>({...d,title:e.target.value}))}/></label>{draft.channel!=="linkedin"&&<label className="field"><span>Subject</span><input value={draft.subject} maxLength={180} onChange={e=>setDraft(d=>({...d,subject:e.target.value}))}/></label>}<label className="field"><span>Message body</span><textarea className="template-body" maxLength={5000} value={draft.body} onChange={e=>setDraft(d=>({...d,body:e.target.value}))}/></label><div className="template-footer"><span>{draft.body.length} characters · {dirty?"Unsaved edits":"Saved"}</span><div><button className="button small" onClick={()=>void onCopy(draft.body)}><Clipboard size={13}/>Copy</button><button className="button primary small" disabled={!dirty||!draft.title.trim()||!draft.body.trim()} onClick={()=>onSave(draft)}><Check size={13}/>Save</button></div></div></section>;
 }

@@ -24,7 +24,7 @@ const initials = (s: string) => s.trim().split(/\s+/).slice(0, 2).map(x => x[0] 
 
 const initialApps: ApplicationRecord[] = [
   { id:"sample-1", user_id:"", company:"Stripe", role:"Software Engineer, Product", stage:"interview", job_url:"https://stripe.com/jobs", location:"Bengaluru · Hybrid", priority:"high", applied_at:daysFromNow(-9), next_action:"Prepare for technical round", next_action_date:daysFromNow(1), notes:"Focus on product thinking and API design.", created_at:new Date().toISOString(), updated_at:new Date().toISOString() },
-  { id:"sample-2", user_id:"", company:"Atlassian", role:"Software Engineer II", stage:"referral_requested", job_url:"https://atlassian.com/company/careers", location:"Remote · India", priority:"high", applied_at:null, next_action:"Follow up with Priya", next_action_date:today(), notes:"Referral contact works in the platform team.", created_at:new Date().toISOString(), updated_at:new Date().toISOString() },
+  { id:"sample-2", user_id:"", company:"Atlassian", role:"Software Engineer II", stage:"applied", job_url:"https://atlassian.com/company/careers", location:"Remote · India", priority:"high", applied_at:null, next_action:"Check in with the referred candidate", next_action_date:today(), notes:"Role tracked for a candidate referral.", created_at:new Date().toISOString(), updated_at:new Date().toISOString() },
   { id:"sample-3", user_id:"", company:"Microsoft", role:"Software Engineer", stage:"applied", job_url:"https://careers.microsoft.com", location:"Hyderabad · Hybrid", priority:"normal", applied_at:daysFromNow(-5), next_action:"Check application status", next_action_date:daysFromNow(3), notes:"", created_at:new Date().toISOString(), updated_at:new Date().toISOString() },
   { id:"sample-4", user_id:"", company:"Razorpay", role:"Backend Engineer", stage:"saved", job_url:"https://razorpay.com/jobs", location:"Bengaluru · On-site", priority:"normal", applied_at:null, next_action:"Ask for an internal referral", next_action_date:daysFromNow(2), notes:"Review the role requirements first.", created_at:new Date().toISOString(), updated_at:new Date().toISOString() },
   { id:"sample-5", user_id:"", company:"Adobe", role:"Computer Scientist", stage:"offer", job_url:"https://careers.adobe.com", location:"Noida · Hybrid", priority:"high", applied_at:daysFromNow(-24), next_action:"Review offer details", next_action_date:today(), notes:"Compare compensation and growth path.", created_at:new Date().toISOString(), updated_at:new Date().toISOString() },
@@ -35,7 +35,7 @@ const initialContacts: ContactRecord[] = [
   { id:"contact-3", user_id:"", name:"Aditi Verma", company:"Microsoft", role:"Technical Recruiter", email:null, linkedin_url:"https://www.linkedin.com/", relationship:"Recruiter", notes:"Recruiting for India engineering teams.", created_at:new Date().toISOString() },
 ];
 const initialTemplates: OutreachTemplate[] = [
-  { key:"linkedin_intro", title:"LinkedIn connection", channel:"linkedin", subject:"", body:"Hi {name}, I came across your work at {company} and found your journey interesting. I’m exploring {role} opportunities and would love to connect and learn from your experience. Thanks!" },
+  { key:"linkedin_intro", title:"Candidate introduction", channel:"linkedin", subject:"", body:"Hi {name}, great connecting with you. I saw your interest in {role} opportunities at {company}. Happy to share what I know about the team and keep you posted on the referral process." },
   { key:"referral_request", title:"Referral confirmation", channel:"email", subject:"Referral submitted for {role} at {company}", body:"Hi {name},\n\nI wanted to let you know that I’ve submitted your referral for the {role} opportunity at {company}. I’ll keep you posted if I hear about any updates.\n\nIf you receive any communication from the hiring team, feel free to let me know so I can keep track of the progress.\n\nBest,\n{your_name}" },
   { key:"gentle_follow_up", title:"Candidate progress check-in", channel:"follow_up", subject:"Checking in on {role} at {company}", body:"Hi {name},\n\nI wanted to check in on your application for the {role} opportunity at {company}. Have you heard anything from the hiring team or received an update on next steps?\n\nNo pressure if there’s no news yet — I’m just keeping my referral tracker up to date and happy to help where I can.\n\nBest,\n{your_name}" },
 ];
@@ -119,7 +119,7 @@ export default function HomePage() {
     ]);
     if(a.error)notify("Could not load applications: "+a.error.message,true);else setApps((a.data??[]) as ApplicationRecord[]);
     if(c.error)notify("Could not load contacts: "+c.error.message,true);else setContacts((c.data??[]) as ContactRecord[]);
-    if(r.error)notify("Could not load referral requests: "+r.error.message,true);else setReferralRequests((r.data??[]) as ReferralRequestRecord[]);
+    if(r.error)notify("Could not load referral records: "+r.error.message,true);else setReferralRequests((r.data??[]) as ReferralRequestRecord[]);
     if(e.error)notify("Could not load activity history: "+e.error.message,true);else setActivity((e.data??[]) as ActivityEventRecord[]);
     if(t.error){
       notify("Could not load templates. Apply the latest schema in Supabase.",true);
@@ -386,7 +386,7 @@ export default function HomePage() {
               <button className="button small" onClick={()=>{setAgentRefreshedAt(new Date());setAgentAnswer(localAgentAnswer("What should I do next based on my current referral pipeline?"));setAgentMode("rules");}}><Activity size={14}/>Reassess</button>
             </div>
             <div className="agent-insights">
-              <div className="agent-insight"><span>What you’ve done</span><strong>{apps.length} <small>opportunities</small></strong><p>{contacts.length} contacts · {referralRequests.length} tracked referral requests</p></div>
+              <div className="agent-insight"><span>What you’ve done</span><strong>{apps.length} <small>opportunities</small></strong><p>{contacts.length} contacts · {referralRequests.length} tracked referrals</p></div>
               <div className="agent-insight"><span>Momentum so far</span><strong>{interviews+offers} <small>interviews / offers</small></strong><p>{activity.length} recent workspace events recorded</p></div>
               <div className="agent-insight"><span>Needs attention</span><strong>{due} <small>due follow-ups</small></strong><p>{due===0?"No dated follow-ups are overdue today.":"Start with the most time-sensitive follow-up."}</p></div>
             </div>

@@ -16,9 +16,12 @@ This repository is being developed directly on `main` at the owner's request. Wo
 - PostgreSQL schema for profiles, applications, contacts, referral requests, follow-ups, templates, and activity
 - Row Level Security on every user-owned table
 - Load and mutate only records owned by the authenticated user
+- Persist referral requests with statuses from draft through referred/declined/closed
+- Seed editable default outreach templates per new account
 - Replace demo data with real data when a project is configured
 
-## Milestone 3 — Quality and production readiness
+## Milestone 3 — Activity history, quality, and production readiness
+- Write and display user-scoped activity events for key changes
 - Add unit and end-to-end tests for core flows
 - Validate database constraints, URL inputs, and CSV edge cases
 - Add accessible form labels, keyboard/focus behavior, and responsive checks

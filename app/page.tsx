@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import { APPLICATION_STAGES, STAGE_COLORS, STAGE_LABELS, type ApplicationRecord, type ApplicationStage, type ContactRecord, type OutreachTemplate, type Priority, type ReferralRequestRecord, type ReferralRequestStatus } from "@/lib/types";
+import { APPLICATION_STAGES, STAGE_COLORS, STAGE_LABELS, type ApplicationRecord, type ApplicationStage, type ContactRecord, type OutreachTemplate, type Priority, type ReferralRequestRecord, type ReferralRequestStatus, type ActivityEventRecord } from "@/lib/types";
 
 type Section = "overview" | "applications" | "board" | "contacts" | "referrals" | "follow-ups" | "templates";
 type ToastState = { message: string; error?: boolean } | null;
@@ -66,6 +66,7 @@ export default function HomePage() {
   const [apps,setApps]=useState<ApplicationRecord[]>(initialApps);
   const [contacts,setContacts]=useState<ContactRecord[]>(initialContacts);
   const [referralRequests,setReferralRequests]=useState<ReferralRequestRecord[]>([]);
+  const [activity,setActivity]=useState<ActivityEventRecord[]>([]);
   const [templates,setTemplates]=useState<OutreachTemplate[]>(initialTemplates);
   const [session,setSession]=useState<Session|null>(null);
   const [authReady,setAuthReady]=useState(!isSupabaseConfigured);
@@ -86,6 +87,12 @@ export default function HomePage() {
   const cloudReady=isSupabaseConfigured && Boolean(session?.user);
 
   const notify=useCallback((message:string,error=false)=>{setToast({message,error});window.setTimeout(()=>setToast(null),3200);},[]);
+  const recordActivity=useCallback(async(entity_type:ActivityEventRecord["entity_type"],entity_id:string|null,action:string,summary:string)=>{
+    if(!cloudReady||!session?.user.id)return;
+    const {data,error}=await createClient().from("activity_events").insert({user_id:session.user.id,entity_type,entity_id,action,summary}).select("*").single();
+    if(error){notify("Change saved, but activity history could not be updated.",true);return;}
+    setActivity(current=>[data as ActivityEventRecord,...current].slice(0,20));
+  },[cloudReady,notify,session]);
   useEffect(()=>{
     if(!isSupabaseConfigured)return;
     const supabase=createClient();
@@ -98,15 +105,17 @@ export default function HomePage() {
   const loadCloud=useCallback(async()=>{
     if(!cloudReady)return;
     const supabase=createClient();
-    const [a,c,t,r]=await Promise.all([
+    const [a,c,t,r,e]=await Promise.all([
       supabase.from("applications").select("*").order("updated_at",{ascending:false}),
       supabase.from("contacts").select("*").order("created_at",{ascending:false}),
       supabase.from("outreach_templates").select("*").order("title"),
       supabase.from("referral_requests").select("*").order("updated_at",{ascending:false}),
+      supabase.from("activity_events").select("*").order("created_at",{ascending:false}).limit(20),
     ]);
     if(a.error)notify("Could not load applications: "+a.error.message,true);else setApps((a.data??[]) as ApplicationRecord[]);
     if(c.error)notify("Could not load contacts: "+c.error.message,true);else setContacts((c.data??[]) as ContactRecord[]);
     if(r.error)notify("Could not load referral requests: "+r.error.message,true);else setReferralRequests((r.data??[]) as ReferralRequestRecord[]);
+    if(e.error)notify("Could not load activity history: "+e.error.message,true);else setActivity((e.data??[]) as ActivityEventRecord[]);
     if(t.error){
       notify("Could not load templates. Apply the latest schema in Supabase.",true);
     }else if(t.data?.length){
@@ -204,6 +213,7 @@ export default function HomePage() {
       if(result.error){notify("Could not save referral request: "+result.error.message,true);return;}
       const saved=result.data as ReferralRequestRecord;
       setReferralRequests(cur=>previous?cur.map(x=>x.id===saved.id?saved:x):[saved,...cur]);
+      void recordActivity("referral_request",saved.id,previous?"updated":"created",(previous?"Updated":"Started")+" referral request for "+(apps.find(a=>a.id===application_id)?.company??"an application")+" with "+(contacts.find(c=>c.id===contact_id)?.name??"a contact")+" ("+status.replaceAll("_"," ")+").");
     }else{
       const now=new Date().toISOString();
       const local:ReferralRequestRecord={...record,id:previous?.id??crypto.randomUUID(),user_id:"",created_at:previous?.created_at??now};
@@ -216,12 +226,13 @@ export default function HomePage() {
     const patch={status,requested_at:status==="requested"?(request.requested_at??new Date().toISOString()):request.requested_at,responded_at:["responded","referred","declined","closed"].includes(status)?(request.responded_at??new Date().toISOString()):request.responded_at,updated_at:new Date().toISOString()};
     if(cloudReady){const {data,error}=await createClient().from("referral_requests").update(patch).eq("id",request.id).select().single();if(error){notify("Could not update status: "+error.message,true);return;}setReferralRequests(cur=>cur.map(x=>x.id===request.id?data as ReferralRequestRecord:x));}
     else setReferralRequests(cur=>cur.map(x=>x.id===request.id?{...x,...patch}:x));
+    void recordActivity("referral_request",request.id,"status_changed","Changed referral status to "+status.replaceAll("_"," ")+".");
     notify("Referral status updated.");
   }
   async function deleteReferralRequest(request:ReferralRequestRecord){
     if(!window.confirm("Delete this referral request?"))return;
     if(cloudReady){const {error}=await createClient().from("referral_requests").delete().eq("id",request.id);if(error){notify("Could not delete referral request: "+error.message,true);return;}}
-    setReferralRequests(cur=>cur.filter(x=>x.id!==request.id));notify("Referral request deleted.");
+    setReferralRequests(cur=>cur.filter(x=>x.id!==request.id));void recordActivity("referral_request",request.id,"deleted","Deleted a referral request.");notify("Referral request deleted.");
   }
   async function saveTemplate(t:OutreachTemplate){
     if(cloudReady){const {data,error}=await createClient().from("outreach_templates").upsert({...t,user_id:session!.user.id,updated_at:new Date().toISOString()},{onConflict:"user_id,key"}).select().single();if(error){notify("Could not save template: "+error.message,true);return;}setTemplates(cur=>cur.map(x=>x.key===t.key?data as OutreachTemplate:x));}
@@ -313,6 +324,8 @@ export default function HomePage() {
             <section className="panel"><PanelHeader title="Pipeline snapshot" subtitle="Where opportunities stand" action="Open board" onAction={()=>changeSection("board")}/><div className="progress-list">{APPLICATION_STAGES.filter(s=>apps.some(a=>a.stage===s)||["saved","applied","interview","offer"].includes(s)).map(s=>{const count=apps.filter(a=>a.stage===s).length;const percent=apps.length?Math.round(count/apps.length*100):0;return <div className="progress-row" key={s}><div><span>{STAGE_LABELS[s]}</span><strong>{count} <small>· {percent}%</small></strong></div><div className="progress-track"><span style={{width:percent+"%"}}/></div></div>;})}</div></section>
             <section className="panel"><PanelHeader title="Network at a glance" subtitle="People behind possible introductions" action="Contacts" onAction={()=>changeSection("contacts")}/><div className="action-list">{contacts.slice(0,3).map(c=><div className="action-row" key={c.id}><div className="avatar">{initials(c.name)}</div><div className="action-copy"><strong>{c.name}</strong><span>{c.role||"Contact"} · {c.company}</span><small>{c.relationship||"Relationship not set"}</small></div>{c.linkedin_url&&<a className="plain-icon" href={c.linkedin_url} target="_blank" rel="noreferrer" aria-label="Open LinkedIn"><ExternalLink size={14}/></a>}</div>)}{!contacts.length&&<Empty title="Your network starts here" text="Add a contact to keep referral context close by." action="Add contact" onAction={()=>setContactModal(true)}/>}</div></section>
           </div>
+
+          <section className="panel activity-panel"><PanelHeader title="Recent activity" subtitle="A private timeline of changes in your workspace." side={<span className="count">{activity.length}</span>}/>{activity.length?<div className="action-list">{activity.slice(0,6).map(event=><div className="action-row" key={event.id}><div className="action-icon"><Activity size={15}/></div><div className="action-copy"><strong>{event.summary}</strong><small>{new Date(event.created_at).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})}</small></div></div>)}</div>:<Empty title="Your activity timeline starts here" text="Referral request changes will appear here as you track introductions."/>}</section>
         </>}
 
         {section==="applications"&&<section className="panel"><PanelHeader title="All applications" subtitle="A searchable, editable record of your job search." side={<button className="button small" onClick={()=>changeSection("board")}><LayoutGrid size={14}/>Board view</button>}/><div className="toolbar"><Filter size={14}/><span>Stage</span><select className="select-control" aria-label="Filter stage" value={stageFilter} onChange={e=>setStageFilter(e.target.value)}><option value="all">All stages</option>{stages.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}</select><small>{filtered.length} of {apps.length} records</small></div><AppTable rows={filtered} onEdit={a=>{setEditApp(a);setAppModal(true);}} onDelete={deleteApp} onMove={moveApp}/>{!filtered.length&&<Empty title="No applications found" text={apps.length?"Change your filters or search terms.":"Add your first role or import a CSV."} action="Add application" onAction={()=>setAppModal(true)}/>}</section>}
